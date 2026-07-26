@@ -43,40 +43,33 @@ class SimpleKriging(Kriging):
         Returns:
             tuple[float, float]: Estimated value and kriging standard deviation.
         """
-        n_sampled = len(sampled)
+        sampled = np.asarray(sampled, dtype=float)
+        if sampled.ndim != 2 or sampled.shape[0] == 0 or sampled.shape[1] < 3:
+            raise ValueError('sampled must contain rows of [x, y, value]')
+
         dist_diff = (
-            dist_diff
+            np.asarray(dist_diff, dtype=float)
             if dist_diff is not None
             else np.linalg.norm(unsampled - sampled[:, [0, 1]], axis=1).flatten()
         )
-        sampled[:, 3] = dist_diff
 
-        meanvalue = 0
         if self._cov_cache_flag is True:
-            cov_dist = np.array(self.model.cov_compute(sampled[:, 3])).reshape(-1, 1)
+            cov_dist = np.asarray(self.model.cov_compute(dist_diff), dtype=float)
             self._cov_cache[f'{unsampled[0]}, {unsampled[1]}'] = cov_dist
-            # print(cov_dist)
         elif hasattr(self, '_cov_cache') is True:
             cov_dist = self._cov_cache[f'{unsampled[0]}, {unsampled[1]}']
-            # print("HQWIPE", cov_dist)
         else:
-            cov_dist = np.array(self.model.cov_compute(sampled[:, 3])).reshape(-1, 1)
-        # print(cov_dist)
-        cov_data = squareform(pdist(sampled[:, :2])).flatten()
-        cov_data = np.array(self.model.cov_compute(cov_data))
-        cov_data = cov_data.reshape(n_sampled, n_sampled)
-        # Add a small nugget to the diagonal of the covariance matrix for numerical stability
-        cov_data[np.diag_indices_from(cov_data)] += 1e-4
+            cov_dist = np.asarray(self.model.cov_compute(dist_diff), dtype=float)
 
-        weights = np.linalg.solve(cov_data, cov_dist)
-        residuals = sampled[:, 2] - meanvalue
-        estimation = np.dot(weights.T, residuals) + meanvalue
-        kriging_var = float(self.model.sill - np.dot(weights.T, cov_dist))
+        pairwise_distances = squareform(pdist(sampled[:, :2]))
+        cov_data = np.asarray(self.model.cov_compute(pairwise_distances), dtype=float)
 
-        kriging_var = kriging_var if kriging_var > 0 else 0
-        kriging_std = np.sqrt(kriging_var)
+        weights = self._solve_system(cov_data, cov_dist)
+        residuals = sampled[:, 2] - self.mean
+        estimation = self.mean + float(np.dot(weights, residuals))
+        kriging_var = self.model.sill - float(np.dot(weights, cov_dist))
 
-        return estimation, kriging_std
+        return float(estimation), self._standard_deviation(kriging_var)
 
     def simulation(self, unsampled: np.ndarray, sampled: np.ndarray, **kwargs) -> float:
         """
@@ -90,15 +83,24 @@ class SimpleKriging(Kriging):
         Returns:
             float: Simulated value for the unsampled location.
         """
+        normal_score = kwargs.get('normal_score')
+        rng = kwargs.get('rng')
         if len(sampled) == 0:
-            return np.random.normal(0, self.model.sill**0.5, 1)
+            return self._unconditional_simulation(normal_score=normal_score, rng=rng)
 
         neighbor = kwargs.get('neighbor')
         if neighbor is not None:
+            if not isinstance(neighbor, (int, np.integer)) or neighbor < 0:
+                raise ValueError('neighbor must be a non-negative integer')
             distances = np.linalg.norm(unsampled - sampled[:, [0, 1]], axis=1)
 
-            draw_random_normal = self._find_neighbor(distances, neighbor)
-            if draw_random_normal:
+            draw_random_normal = self._find_neighbor(
+                distances,
+                neighbor,
+                normal_score=normal_score,
+                rng=rng,
+            )
+            if draw_random_normal is not None:
                 return draw_random_normal
 
             sorted_indices = np.argsort(distances)
@@ -108,32 +110,34 @@ class SimpleKriging(Kriging):
         dist_diff = distances if neighbor is not None else None
         estimation, kriging_std = self.prediction(unsampled, sampled, dist_diff)
 
-        random_fix = np.random.normal(0, kriging_std, 1)
-        return estimation + random_fix
+        score = self._standard_normal(normal_score=normal_score, rng=rng)
+        return float(estimation + kriging_std * score)
 
-    def _find_neighbor(self, distances: list[float], neighbor: int) -> float | None:
+    def _find_neighbor(
+        self,
+        distances: list[float],
+        neighbor: int,
+        normal_score: float | None = None,
+        rng: np.random.Generator | None = None,
+    ) -> float | None:
         """
-        Find a nearby point for simulation based on a neighbor criterion.
+        Draw unconditionally only when neighborhood conditioning is disabled.
 
         Args:
-            distances (list[float]): Distances from sampled points to the unsampled location.
+            distances (list[float]): Distances from sampled points to the target.
             neighbor (int): The number of neighbors to consider.
 
         Returns:
-            float: Simulated value based on neighbors or a random value if no neighbors are found.
+            An unconditional draw when ``neighbor`` is zero; otherwise ``None``.
+
+        Notes:
+            Gaussian and exponential covariance remains non-zero beyond their
+            practical range, so distance alone must not silently turn a
+            conditional draw into an independent one.
         """
         if neighbor == 0:
-            return np.random.normal(0, self.model.sill**0.5, 1)
-        close_point = 0
-
-        criteria = self.k_range * 1.732 if self.model.model_name == 'Gaussian' else self.k_range
-
-        for item in distances:
-            if item <= criteria:
-                close_point += 1
-
-        if close_point == 0:
-            return np.random.normal(0, self.model.sill**0.5, 1)
+            return self._unconditional_simulation(normal_score=normal_score, rng=rng)
+        return None
 
 
 class OrdinaryKriging(SimpleKriging):
@@ -172,40 +176,42 @@ class OrdinaryKriging(SimpleKriging):
         Returns:
             tuple[float, float]: Estimated value and kriging standard deviation.
         """
+        sampled = np.asarray(sampled, dtype=float)
+        if sampled.ndim != 2 or sampled.shape[0] == 0 or sampled.shape[1] < 3:
+            raise ValueError('sampled must contain rows of [x, y, value]')
+
         n_sampled = len(sampled)
         dist_diff = (
-            dist_diff
+            np.asarray(dist_diff, dtype=float)
             if dist_diff is not None
             else np.linalg.norm(unsampled - sampled[:, [0, 1]], axis=1).flatten()
         )
-        sampled[:, 3] = dist_diff
 
         if self._cov_cache_flag:
-            cov_dist = np.array(self.model.cov_compute(sampled[:, 3])).reshape(-1, 1)
+            cov_dist = np.asarray(self.model.cov_compute(dist_diff), dtype=float)
             self._cov_cache[f'{unsampled[0]}, {unsampled[1]}'] = cov_dist
         elif hasattr(self, '_cov_cache'):
             cov_dist = self._cov_cache[f'{unsampled[0]}, {unsampled[1]}']
         else:
-            cov_dist = np.array(self.model.cov_compute(sampled[:, 3])).reshape(-1, 1)
+            cov_dist = np.asarray(self.model.cov_compute(dist_diff), dtype=float)
 
-        cov_data = squareform(pdist(sampled[:, :2])).flatten()
-        cov_data = np.array(self.model.cov_compute(cov_data))
-        cov_data = cov_data.reshape(n_sampled, n_sampled)
-
-        # Add a small value to the diagonal of the covariance matrix for numerical stability
-        cov_data[np.diag_indices_from(cov_data)] += 1e-4
+        pairwise_distances = squareform(pdist(sampled[:, :2]))
+        cov_data = np.asarray(self.model.cov_compute(pairwise_distances), dtype=float)
 
         cov_data_augmented = self._matrix_augmented(cov_data)
-        cov_dist_augmented = np.vstack((cov_dist, [1.0]))
-        weights = np.linalg.solve(cov_data_augmented, cov_dist_augmented)[:n_sampled]
+        cov_dist_augmented = np.append(cov_dist, 1.0)
+        solution = self._solve_system(
+            cov_data_augmented,
+            cov_dist_augmented,
+            covariance_size=n_sampled,
+        )
+        weights = solution[:n_sampled]
+        lagrange_multiplier = float(solution[-1])
 
-        estimation = np.dot(weights.T, sampled[:, 2])
-        kriging_var = float(self.model.sill - np.dot(weights.T, cov_dist))
+        estimation = float(np.dot(weights, sampled[:, 2]))
+        kriging_var = self.model.sill - float(np.dot(weights, cov_dist)) - lagrange_multiplier
 
-        kriging_var = kriging_var if kriging_var > 0 else 0
-        kriging_std = np.sqrt(kriging_var)
-
-        return estimation, kriging_std
+        return estimation, self._standard_deviation(kriging_var)
 
     def _matrix_augmented(self, mat: np.ndarray) -> np.ndarray:
         """

@@ -154,8 +154,8 @@ class TestUCSgsim:
                 exponential,
                 1,
                 {
-                    'max_value': 3,
-                    'min_value': -3,
+                    'max_value': 4,
+                    'min_value': -4,
                     'max_neighbor': 12,
                     'constant_path': True,
                     'cov_cache': True,
@@ -181,7 +181,7 @@ class TestUCSgsim:
                 'OrdinaryKriging',
                 exponential,
                 2,
-                {'max_value': 3, 'min_value': -3, 'max_neighbor': 6},
+                {'max_value': 4, 'min_value': -4, 'max_neighbor': 6},
             ),
             ('OrdinaryKriging', spherical, 2, {'max_value': 3, 'min_value': -3, 'max_neighbor': 6}),
             (

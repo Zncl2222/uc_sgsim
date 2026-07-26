@@ -50,7 +50,8 @@ class TestSimpleKriging:
 
         neighbor = 0
         estimation = self.kriging.simulation(75, mesh, neighbor=neighbor)
-        assert pytest.approx(estimation.item(0), 1e-7) == 0.4691123
+        assert isinstance(estimation, float)
+        assert pytest.approx(estimation, 1e-7) == 0.4691123
 
     def test_ordinary_kriging_prediction(self):
         res = np.empty(self.x_len)
@@ -72,7 +73,8 @@ class TestSimpleKriging:
 
         neighbor = 0
         estimation = self.o_kriging.simulation(75, mesh, neighbor=neighbor)
-        assert pytest.approx(estimation.item(0), 1e-7) == 0.4691123
+        assert isinstance(estimation, float)
+        assert pytest.approx(estimation, 1e-7) == 0.4691123
 
     def test_kriging_repr(self, capsys):
         # Call repr() to get the string representation

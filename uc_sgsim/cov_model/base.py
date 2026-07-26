@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import numpy as np
 from scipy.spatial.distance import cdist
 
@@ -44,6 +46,26 @@ class CovModel:
             nugget (float, optional): The nugget effect parameter for the covariance model
                                       (default is 0).
         """
+        parameters = {
+            'bandwidth_len': bandwidth_len,
+            'bandwidth_step': bandwidth_step,
+            'k_range': k_range,
+            'sill': sill,
+            'nugget': nugget,
+        }
+        if any(not np.isfinite(value) for value in parameters.values()):
+            raise ValueError('covariance model parameters must be finite')
+        if bandwidth_len <= 0:
+            raise ValueError('bandwidth_len must be greater than zero')
+        if bandwidth_step <= 0:
+            raise ValueError('bandwidth_step must be greater than zero')
+        if k_range <= 0:
+            raise ValueError('k_range must be greater than zero')
+        if sill <= 0:
+            raise ValueError('sill must be greater than zero')
+        if nugget < 0 or nugget > sill:
+            raise ValueError('nugget must satisfy 0 <= nugget <= sill')
+
         self._bandwidth_len = bandwidth_len
         self._bandwidth_step = bandwidth_step
         self._bandwidth = np.arange(0, bandwidth_len, bandwidth_step)
@@ -82,37 +104,49 @@ class CovModel:
             + f'k_range={self.k_range}, sill={self.sill}, nugget={self.nugget})'
         )
 
-    def cov_compute(self, x: np.array) -> np.array:
+    def cov_compute(self, x: np.ndarray | float) -> np.ndarray | float:
         """
-        Compute covariance values for a given dataset.
+        Compute covariance values for one or more lag distances.
+
+        ``sill`` is the total point variance.  With a non-zero nugget,
+        covariance is discontinuous at the origin:
+
+        * ``C(0) = sill``
+        * ``C(h) = (sill - nugget) * rho(h)`` for ``h > 0``
 
         Args:
-            x (np.array): Input dataset for which covariance values are computed.
+            x: Non-negative lag distance or distances.
 
         Returns:
-            np.array: Array of covariance values.
+            Covariance value(s) with the same shape as ``x``.
         """
-        cov = np.empty(len(x))
-        for i in range(len(x)):
-            cov[i] = self._sill - self.model(x[i])
+        lags = self._validate_lags(x)
+        semivariogram = np.vectorize(self.model, otypes=[float])(lags)
+        covariance = self._sill - semivariogram
+        return float(covariance) if covariance.ndim == 0 else covariance
 
-        return cov
-
-    def var_compute(self, x: np.array) -> np.array:
+    def var_compute(self, x: np.ndarray | float) -> np.ndarray | float:
         """
-        Compute variance values for a given dataset.
+        Compute theoretical semivariogram values.
 
         Args:
-            x (np.array): Input dataset for which variance values are computed.
+            x: Non-negative lag distance or distances.
 
         Returns:
-            np.array: Array of variance values.
+            Semivariogram value(s) with the same shape as ``x``.
         """
-        var = np.empty(len(x))
-        for i in range(len(x)):
-            var[i] = self.model(x[i])
+        lags = self._validate_lags(x)
+        semivariogram = np.vectorize(self.model, otypes=[float])(lags)
+        return float(semivariogram) if semivariogram.ndim == 0 else semivariogram
 
-        return var
+    @staticmethod
+    def _validate_lags(x: np.ndarray | float) -> np.ndarray:
+        lags = np.asarray(x, dtype=float)
+        if np.any(~np.isfinite(lags)):
+            raise ValueError('lag distances must be finite')
+        if np.any(lags < 0):
+            raise ValueError('lag distances must be non-negative')
+        return lags
 
     def variogram(self, x: np.array) -> np.array:
         """
