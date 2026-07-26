@@ -42,7 +42,7 @@ class Spherical(CovModel):
         if h <= self.k_range:
             return float(
                 partial_sill * (1.5 * h / self.k_range - 0.5 * (h / self.k_range) ** 3.0)
-                + self.nugget
+                + self.nugget,
             )
         return float(self.sill)
 
