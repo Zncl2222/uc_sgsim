@@ -88,6 +88,10 @@ the model equations, numerical safeguards, tests, and current limitations.
 pip install uc-sgsim
 ```
 
+New Python integrations should prefer the result-oriented
+[`SequentialGaussianSimulator` API](docs/python-api-v2.md). The existing
+`UCSgsim` API remains available for incremental migration.
+
 ## Features
 * One-dimensional unconditional random-field generation using SGS
 * A mathematically validated Python Simple Kriging reference implementation
