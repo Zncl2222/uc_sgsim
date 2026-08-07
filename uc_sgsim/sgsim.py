@@ -39,7 +39,12 @@ class UCSgsim(SgsimField):
             object. Defaults to 'SimpleKriging'.
         engine (Literal['python', 'c'], optional): The engine to run
             the simulation ('python' or 'c'). Defaults to 'python'.
-        **kwargs: Additional keyword arguments passed to the parent class.
+        mean (float, optional): Known global mean for Simple Kriging.
+            Defaults to 0.
+        min_value (float, optional): Explicit lower whole-realization
+            rejection bound. Defaults to no lower bound.
+        max_value (float, optional): Explicit upper whole-realization
+            rejection bound. Defaults to no upper bound.
 
     Methods:
         run(n_processes=1, randomseed=123):
@@ -88,10 +93,11 @@ class UCSgsim(SgsimField):
         engine: Literal['python', 'c'] = 'python',
         constant_path: bool = False,
         cov_cache: bool = False,
-        max_neighbor: float = 8,
+        max_neighbor: int = 8,
         iteration_limit: int = 10,
         max_value: Optional[float] = None,
         min_value: Optional[float] = None,
+        mean: float = 0.0,
     ):
         super().__init__(
             grid_size=grid_size,
@@ -104,6 +110,7 @@ class UCSgsim(SgsimField):
             iteration_limit=iteration_limit,
             max_value=max_value,
             min_value=min_value,
+            mean=mean,
         )
         self.engine = engine
 
@@ -233,7 +240,7 @@ class UCSgsim(SgsimField):
             if not self._constant_path or counts == 0:
                 np.random.shuffle(unsampled)
 
-            sampled = np.array([])
+            sampled = np.empty((0, 4), dtype=float)
             # Loop for kriging simulation
             for coordinate in unsampled:
                 x = int(coordinate[0])

@@ -54,50 +54,34 @@
 <h3 align="center">An unconditional random field generation tools that are easy to use.</h3>
 
 ## Introduction to UCSGSIM
-UnConditional Sequential Gaussian Simulation (UCSGSIM) is a method for generating random fields that is based on the kriging interpolation technique.
+Unconditional Sequential Gaussian Simulation (SGS) samples a multi-Gaussian
+random field without conditioning on observed hard data. Values simulated
+earlier along the path still become conditioning data for later nodes.
 
-Unconditional simulation does not adhere to the patterns observed in the data but instead follows the user's settings, such as mean and variance.
+Let \(A\) be the previously simulated nodes, \(K=C(A,A)\), and
+\(k=C(A,x)\). For a known global mean \(m\), Simple Kriging uses
 
-**The core ideas of UCSGSIM are:**
-1. Create the grid (no data values exist at this stage).
+$$
+\lambda = K^{-1}k,\qquad
+\mu_c = m + \lambda^\mathsf{T}(z_A-m),\qquad
+\sigma_c^2 = C(0)-\lambda^\mathsf{T}k.
+$$
 
-$$ \Omega\to R $$
+The next value is sampled from the exact conditional Gaussian distribution:
 
-2. Select a random point within the model (draw one random value from the x_grid).
+$$
+Z(x)=\mu_c+\sigma_c\epsilon,\qquad \epsilon\sim\mathcal N(0,1).
+$$
 
-$$ X = RandomValue(\Omega),  X:\Omega\to R $$
+Repeating this operation along a path factorizes the joint Gaussian density.
+With every prior node included, it is equivalent to direct multivariate-normal
+sampling. A limited neighborhood is a computational approximation.
 
-3. Choose the **theoretical covariance model** to use and set the **sill** and **range** properly.
-
-$$ Gaussian = (C_{0} - s)(1 - e^{-h^{2}/r^{2}a})$$
-
-$$ Spherical = (C_{0} - s)(3h/2r - h^3/2r^3)$$
-
-$$ Exponential = (C_{0} - s)(1 - e^{-h/ra})$$
-
-4. If there are more than one data value close to the visited point (based on the **range** of the covariance model), proceed to the next step. Otherwise, draw a random value from a normal distribution as the simulation result for this iteration.
-
-$$ Z_{k}({X_{simulation}}) = RandomNormal(m = 0 ,\sigma^2 = Sill)$$
-
-5. Calculate **weights** from the **data covaraince** and **distance coavariance**
-
-$$ \sum_{j=1}^{n}\omega_{j} = C(X_{data}^{i},X_{data}^{i})C^{-1}(X_i,X_i), i=1...N $$
-
-6. Calculate the **kriging estimate** from the **weights** and **data value**
-
-$$ Z_{k}(X_{estimate}) = \sum_{i=1}^{n} \omega_{i} Z(X_{data}) + (1- \sum_{i=1}^{n} \omega_{i} m_{g}) $$
-
-7. Calculate the **kriging error (kriging variance)** from **weights** and **data covariance**
-
-$$ \sigma_{krige}^{2} = \sum_{i=1}^{n}\omega_{i}C(X_{data}^{i},X_{data}^{i}) $$
-
-8. Draw a random value from the normal distribution and add to the **kriging estimate**.
-
-$$ Z(X_{simulation}) = Z(X_{estimate}) + RandomNormal(m = 0, \sigma^2 = \sigma_{krige}^{2}) $$
-
-9. Repeat 2 ~ 8 until the entire model is simulated.
-
-10. Repeat 1 ~ 9 with different **randomseed number** to produce mutiple realizations.
+The covariance contract treats `sill` as the total point variance. With nugget
+\(\tau^2\), \(C(0)=\text{sill}\), while for \(h>0\),
+\(C(h)=(\text{sill}-\tau^2)\rho(h)\). See
+[the scientific model and validation contract](docs/scientific-model.md) for
+the model equations, numerical safeguards, tests, and current limitations.
 
 ## Installation
 ```bash
@@ -105,9 +89,11 @@ pip install uc-sgsim
 ```
 
 ## Features
-* One dimensional unconditional randomfield generation with sequential gaussian simulation algorithm
-* Muti-cores simulation (mutiprocessing)
-* Ability to generate random fields in Python using either a C interface via ctype or directly in Python using the NumPy and SciPy libraries.
+* One-dimensional unconditional random-field generation using SGS
+* A mathematically validated Python Simple Kriging reference implementation
+* Multi-core simulation using Python multiprocessing
+* A legacy C backend retained for compatibility; it is not yet scientifically
+  equivalent to the Python reference
 
 ## Examples
 ```py
@@ -116,51 +102,32 @@ import uc_sgsim as uc
 from uc_sgsim.cov_model import Gaussian
 
 if __name__ == '__main__':
-    x = 151  # Model grid, only 1D case is support now
+    grid_size = 151
+    realization_count = 10
+    covariance = Gaussian(
+        bandwidth_len=35,
+        bandwidth_step=1,
+        k_range=17.32,
+        sill=1.0,
+        nugget=0.0,
+    )
 
-    bw_s = 1  # lag step
-    bw_l = 35  # lag range
-    randomseed = 151  # randomseed for simulation
-    k_range = 17.32  # effective range of covariance model
-    sill = 1  # sill of covariance model
-
-    nR = 10  # numbers of realizations in each CPU cores,
-    # if nR = 1 n_process = 8
-    # than you will compute total 8 realizations
-
-    # Create Covariance model first
-    cov_model = Gaussian(bw_l, bw_s, k_range, sill)
-
-    # Create simulation and input the Cov model
-    # You could also set min_value, max_value and max_neighbor for sgsim by key words
-    # sgsim = uc.UCSgsimDLL(x, nR, cov_model, min_value=-6, max_value=6, max_neigh=10)
-    # set min_value, max_value and max_neighbor by directly assign
-    # sgsim.min_value = -6
-    # sgsim.max_value = 6
-    # sgsim.max_neigh = 10
-
-    # Create simulation with default min_value, max_value and max_neigh params
-    sgsim_py = uc.UCSgsim(x, nR, cov_model) # run sgsim with python
-    sgsim_c = uc.UCSgsimDLL(x, nR, cov_model) # run sgsim with c
-
-    # Start compute with n CPUs
-    sgsim_c.compute(n_process=2, randomseed=randomseed)
-    sgsim_py.compute(n_process=2, randomseed=987654)
-
-    sgsim_c.mean_plot('ALL')  # Plot mean
-    sgsim_c.variance_plot()  # Plot variance
-    sgsim_c.cdf_plot(x_location=10)  # CDF
-    sgsim_c.hist_plot(x_location=10)  # Hist
-    sgsim_c.variogram_compute(n_process=2)  # Compute variogram before plotting
-    # Plot variogram and mean variogram for validation
-    sgsim.variogram_plot()
-    # Save random_field and variogram
-    sgsim_c.save_random_field('randomfields.csv', save_single=True)
-    sgsim_c.save_variogram('variograms.csv', save_single=True)
-
-    # show figure
+    simulation = uc.UCSgsim(
+        grid_size,
+        realization_count,
+        covariance,
+        mean=0.0,
+        max_neighbor=8,
+        engine='python',
+    )
+    simulation.run(n_processes=1, randomseed=151)
+    simulation.plot()
     plt.show()
 ```
+
+The default simulation is unbounded. Supplying `min_value` or `max_value`
+enables whole-realization rejection and therefore samples a bounded,
+conditional distribution rather than the original Gaussian field.
 
 <p align="center">
    <img src="https://github.com/Zncl2222/Stochastic_SGSIM/blob/main/figure/Realizations.png"  width="40%"/>

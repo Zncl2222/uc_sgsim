@@ -73,8 +73,6 @@ if(IS_EXECUTE)
         COMMAND ctest -T Coverage
     )
 
-    add_subdirectory(uc_sgsim)
-
     add_executable(
         unittest
         uc_sgsim/c_core/tests/sgsim_test.c

@@ -1,4 +1,4 @@
-name: Unit test and sonar analysis
+name: Unit tests and coverage
 
 on:
   push:
@@ -87,28 +87,16 @@ jobs:
   c_test:
     name: c-unittest
     runs-on: ubuntu-22.04
-    env:
-      BUILD_WRAPPER_OUT_DIR: build_wrapper_output_directory # Directory where build-wrapper output will be placed
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # Shallow clones should be disabled for a better relevancy of analysis
       - name: Pull Submodule
         run: git submodule update --init --recursive
-      - name: Set up Python 3.11 for gcovr
-        uses: actions/setup-python@v5
-        with:
-          python-version: 3.11
-      - name: install gcovr 5.0
+      - name: Build native targets
         run: |
-          pip install gcovr==5.0 # 5.1 is not supported
-      - name: Install sonar-scanner and build-wrapper
-        uses: SonarSource/sonarcloud-github-c-cpp@v2
-      - name: Run build-wrapper
-        run: |
-          mkdir build
           cmake -S . -B build
-          build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} cmake --build build/ --config Release
+          cmake --build build/ --config Release
       - name: Run tests to generate coverage statistics
         run: |
           cd build
@@ -125,15 +113,6 @@ jobs:
           cd build
           lcov -c -d . -o cover.info
           cd ..
-      - name: Collect coverage into one XML report
-        run: |
-          gcovr --sonarqube > c_coverage.xml
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: c-coverage
-          path: |
-            ./c_coverage.xml
       - uses: actions/upload-artifact@v4
         with:
           name: c-coverage2
@@ -143,8 +122,6 @@ jobs:
   c_test_windows:
     name: c-unittest-windows
     runs-on: windows-latest
-    env:
-      BUILD_WRAPPER_OUT_DIR: build_wrapper_output_directory # Directory where build-wrapper output will be placed
     steps:
       - uses: actions/checkout@v4
         with:
@@ -155,72 +132,36 @@ jobs:
         run: |
           .\build_scripts\cmake_build.bat
 
-  python_scan:
-    name: SonarCloud-py
+  python_coverage:
+    name: codecov-py
     runs-on: ubuntu-latest
     needs: [python_test]
 
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Shallow clones should be disabled for a better relevancy of analysis
+          fetch-depth: 0
       - name: Download artifacts
         uses: actions/download-artifact@v4
-      - name: Run sonar-scanner
-        uses: SonarSource/sonarcloud-github-action@master
-        with:
-          args: >
-            -Dsonar.projectKey=zncl2222_Stochastic_UC_SGSIM_py
-            -Dsonar.organization=zncl2222
-            -Dsonar.projectName=Stochastic_UC_SGSIM_py
-            -Dsonar.projectVersion=1.0
-            -Dsonar.sources=uc_sgsim/
-            -Dsonar.exclusions=uc_sgsim/c_core/**
-            -Dsonar.python.coverage.reportPaths=python-coverage/py_coverage.xml
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN_PY }} # Put the name of your token here
-      - name: Upload coverage reports to Codecov
+      - name: Upload Python coverage to Codecov
         uses: codecov/codecov-action@v4.0.1
         with:
-          token: ${{secrets.CODECOV_TOKEN}}
-          file: py_coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: python-coverage/py_coverage.xml
 
-  c_scan:
-    name: SonarCloud-c
+  c_coverage:
+    name: codecov-c
     runs-on: ubuntu-latest
     needs: [c_test]
-    env:
-      BUILD_WRAPPER_OUT_DIR: build_wrapper_output_directory # Directory where build-wrapper output will be placed
+
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Shallow clones should be disabled for a better relevancy of analysis
-      - name: Install sonar-scanner and build-wrapper
-        uses: SonarSource/sonarcloud-github-c-cpp@v2
-      - name: Pull Submodule
-        run: git submodule update --init --recursive
+          fetch-depth: 0
       - name: Download artifacts
         uses: actions/download-artifact@v4
-      - name: Run build-wrapper
-        run: |
-          mkdir build
-          cmake -S . -B build
-          build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} cmake --build build/ --config Release
-      - name: Run sonar-scanner
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN_C }} # Put the name of your token here
-        run: |
-          sonar-scanner --define sonar.projectKey=zncl2222_Stochastic_UC_SGSIM_c \
-                        --define sonar.organization=zncl2222 \
-                        --define sonar.projectName=Stochastic_UC_SGSIM_c \
-                        --define sonar.projectVersion=1.0 \
-                        --define sonar.sources=uc_sgsim/c_core/src/ \
-                        --define sonar.cfamily.build-wrapper-output="${{ env.BUILD_WRAPPER_OUT_DIR }}" \
-                        --define sonar.coverageReportPaths=c-coverage/c_coverage.xml \
-      - name: Upload coverage reports to Codecov
+      - name: Upload C coverage to Codecov
         uses: codecov/codecov-action@v4.0.1
         with:
-          token: ${{secrets.CODECOV_TOKEN}}
+          token: ${{ secrets.CODECOV_TOKEN }}
           file: c-coverage2/cover.info

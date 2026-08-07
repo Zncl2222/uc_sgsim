@@ -180,10 +180,11 @@ class SgsimField(RandomField, SgsimPlot):
         kriging: str | Kriging = 'SimpleKriging',
         constant_path: bool = False,
         cov_cache: bool = False,
-        max_neighbor: float = 8,
+        max_neighbor: int = 8,
         iteration_limit: int = 10,
         max_value: Optional[float] = None,
         min_value: Optional[float] = None,
+        mean: float = 0.0,
     ):
         """
         Initialize a Sgsim field.
@@ -193,7 +194,11 @@ class SgsimField(RandomField, SgsimPlot):
             n_realizations (int): Number of realizations.
             model (CovModel): Covariance model for simulation.
             kriging (str | Kriging): Kriging method to use (default is 'SimpleKriging').
-            **kwargs: Additional keyword arguments.
+            mean (float): Known global mean used by Simple Kriging.
+            min_value (float, optional): Explicit lower rejection bound. The
+                default is unbounded.
+            max_value (float, optional): Explicit upper rejection bound. The
+                default is unbounded.
         """
         RandomField.__init__(self, grid_size, n_realizations)
         SgsimPlot.__init__(self, model)
@@ -204,9 +209,12 @@ class SgsimField(RandomField, SgsimPlot):
         self._kriging = kriging
         self._constant_path = constant_path
         self._use_cov_cache = cov_cache
-        self._max_neighbor = max_neighbor
+        if not isinstance(max_neighbor, (int, np.integer)) or max_neighbor < 0:
+            raise ValueError('max_neighbor must be a non-negative integer')
+        self._max_neighbor = int(max_neighbor)
         self._max_value = max_value
         self._min_value = min_value
+        self._mean = float(mean)
         self.iteration_limit = iteration_limit
         self._set_kriging_method()
         self._set_default_value()
@@ -230,6 +238,10 @@ class SgsimField(RandomField, SgsimPlot):
     @property
     def min_value(self) -> float:
         return self._min_value
+
+    @property
+    def mean(self) -> float:
+        return self._mean
 
     @property
     def max_neighbor(self) -> int:
@@ -268,17 +280,32 @@ class SgsimField(RandomField, SgsimPlot):
             raise ValueError('cov_cache should be False when constant_path is False')
 
         if self._kriging == 'SimpleKriging':
-            self._kriging = SimpleKriging(self.model, self.grid_size, self._use_cov_cache)
+            self._kriging = SimpleKriging(
+                self.model,
+                self.grid_size,
+                self._use_cov_cache,
+                mean=self._mean,
+            )
         elif self._kriging == 'OrdinaryKriging':
-            self._kriging = OrdinaryKriging(self.model, self.grid_size, self._use_cov_cache)
+            self._kriging = OrdinaryKriging(
+                self.model,
+                self.grid_size,
+                self._use_cov_cache,
+                mean=self._mean,
+            )
         else:
             if not isinstance(self._kriging, (SimpleKriging, OrdinaryKriging)):
                 raise TypeError('Kriging should be class SimpleKriging or OrdinaryKriging')
+            if not np.isclose(self._kriging.mean, self._mean):
+                raise ValueError('mean must match the mean configured on the Kriging object')
 
     def _set_default_value(self) -> None:
-        default_thresold = self.model.sill**0.5 * 4
-        self._min_value = -(default_thresold) if self._min_value is None else self._min_value
-        self._max_value = default_thresold if self._max_value is None else self._max_value
+        self._min_value = -np.inf if self._min_value is None else float(self._min_value)
+        self._max_value = np.inf if self._max_value is None else float(self._max_value)
+        if np.isnan(self._min_value) or np.isnan(self._max_value):
+            raise ValueError('min_value and max_value must not be NaN')
+        if self._min_value >= self._max_value:
+            raise ValueError('min_value must be smaller than max_value')
 
     def get_all_attributes(self) -> dict:
         """
@@ -294,6 +321,7 @@ class SgsimField(RandomField, SgsimPlot):
             'kriging': self._kriging,
             'constant_path': self._constant_path,
             'cov_cache': self._use_cov_cache,
+            'mean': self._mean,
             'min_value': self._min_value,
             'max_value': self._max_value,
             'max_neighbor': self._max_neighbor,

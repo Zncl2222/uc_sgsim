@@ -1,6 +1,15 @@
 import os
 from ctypes import Structure, POINTER, c_double, c_int
 
+import numpy as np
+
+
+def _scalar_value(value) -> float:
+    array = np.asarray(value)
+    if array.size != 1:
+        raise ValueError('Expected a scalar or size-one array')
+    return float(array.reshape(-1)[0])
+
 
 def save_as_multiple_file(
     number: str,
@@ -29,7 +38,7 @@ def save_as_multiple_file(
         for j in range(0, size):
             print(
                 '%.2d' % (j),
-                '%10.6f' % (field[idx, j]),
+                '%10.6f' % (_scalar_value(field[idx, j])),
                 file=f,
             )
 
@@ -50,7 +59,7 @@ def save_as_one_file(path: str, field: list) -> None:
             for j in range(len(field[0, :])):
                 end = '\n' if j == len(field[0, :]) - 1 else ', '
                 print(
-                    '%10.6f' % (field[i, j]),
+                    '%10.6f' % (_scalar_value(field[i, j])),
                     file=f,
                     end=end,
                 )
