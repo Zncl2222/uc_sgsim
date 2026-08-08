@@ -96,6 +96,10 @@ static sgsim_status_t validate_arguments(
     if (sgsim->if_alloc_memory != 0 && sgsim->if_alloc_memory != 1) {
         return SGSIM_STATUS_INVALID_ARGUMENT;
     }
+    if ((sgsim->if_alloc_memory == 1 && sgsim->array != NULL)
+        || (sgsim->if_alloc_memory == 0 && sgsim->array == NULL)) {
+        return SGSIM_STATUS_INVALID_ARGUMENT;
+    }
     if ((sgsim->constant_path != 0 && sgsim->constant_path != 1)
         || (cov_model->use_cov_cache != 0 && cov_model->use_cov_cache != 1)) {
         return SGSIM_STATUS_INVALID_ARGUMENT;
@@ -193,14 +197,11 @@ sgsim_status_t sgsim_run_checked(
         return SGSIM_STATUS_INVALID_ARGUMENT;
     }
 
-    if (sgsim->array == NULL && sgsim->if_alloc_memory == 1) {
+    if (sgsim->if_alloc_memory == 1) {
         sgsim->array = calloc(x_len * realization_count, sizeof(double));
         if (sgsim->array == NULL) {
             return SGSIM_STATUS_ALLOCATION_FAILED;
         }
-    }
-    if (sgsim->array == NULL) {
-        return SGSIM_STATUS_INVALID_ARGUMENT;
     }
 
     sgsim_workspace_t workspace = {0};
@@ -315,6 +316,8 @@ void sgsim_t_free(sgsim_t* sgsim) {
     if (sgsim == NULL) {
         return;
     }
-    free(sgsim->array);
+    if (sgsim->if_alloc_memory == 1) {
+        free(sgsim->array);
+    }
     sgsim->array = NULL;
 }

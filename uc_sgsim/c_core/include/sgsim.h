@@ -42,7 +42,7 @@ typedef struct {
     int realization_numbers;  // Number of realizetions to generate.
     int randomseed;
     int kriging_method;
-    int if_alloc_memory;  // Flag to indicate memory allocation status
+    int if_alloc_memory;  // 1: library-owned output; 0: caller-owned output.
     int iteration_limit;  // The tolerance of maximum times of iteration error
     double* array;  // Array to store the simulated values.
     double z_min;  // Minimum simulated value.
@@ -80,7 +80,9 @@ void sgsim_run(sgsim_t* sgsim, cov_model_t* cov_model, int vario_flag);
 
 /**
  * Run the native 1D engine and return a machine-readable status code.
- * The caller owns ``sgsim->array`` unless ``if_alloc_memory`` is set.
+ * With ``if_alloc_memory == 1``, ``array`` must be NULL on entry and the
+ * library allocates it. With ``if_alloc_memory == 0``, ``array`` must point to
+ * caller-owned storage large enough for all output values.
  */
 sgsim_status_t sgsim_run_checked(
     sgsim_t* sgsim,
@@ -93,7 +95,8 @@ const char* sgsim_status_message(sgsim_status_t status);
 /**
  * @brief Free memory allocated for an sgsim_t structure.
  *
- * This function releases memory allocated for the sgsim_t structure.
+ * This function releases ``array`` only when ``if_alloc_memory == 1``. For
+ * caller-owned storage it only clears the pointer in the structure.
  *
  * @param sgsim Pointer to the sgsim_t structure to free.
  */

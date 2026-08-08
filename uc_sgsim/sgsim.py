@@ -107,6 +107,8 @@ class UCSgsim(SgsimField):
         min_value: Optional[float] = None,
         mean: float = 0.0,
     ):
+        if engine not in ('python', 'c'):
+            raise ValueError("engine must be either 'python' or 'c'")
         super().__init__(
             grid_size=grid_size,
             n_realizations=realization_number,
@@ -120,6 +122,10 @@ class UCSgsim(SgsimField):
             min_value=min_value,
             mean=mean,
         )
+        if engine == 'c' and not isinstance(grid_size, int):
+            raise ValueError('the c backend currently supports only 1D grids')
+        if engine == 'c' and self.mean != 0.0:
+            raise ValueError('the c backend currently supports only a zero mean')
         self.engine = engine
 
     def run(self, n_processes: int = 1, randomseed: Optional[int] = None):

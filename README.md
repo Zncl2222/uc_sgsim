@@ -60,8 +60,8 @@ New Python integrations should prefer the result-oriented
 * One-dimensional unconditional random-field generation using SGS
 * A mathematically validated Python Simple Kriging reference implementation
 * Multi-core simulation using Python multiprocessing
-* A legacy C backend retained for compatibility; it is not yet scientifically
-  equivalent to the Python reference
+* A sanitizer-tested native C engine validated against the Python reference
+  for the supported one-dimensional, zero-mean Simple Kriging profile
 
 ## Examples
 ```py
@@ -86,7 +86,7 @@ if __name__ == '__main__':
         covariance,
         mean=0.0,
         max_neighbor=8,
-        engine='python',
+        engine='c',
     )
     simulation.run(n_processes=1, randomseed=151)
     simulation.plot()
@@ -96,6 +96,13 @@ if __name__ == '__main__':
 The default simulation is unbounded. Supplying `min_value` or `max_value`
 enables whole-realization rejection and therefore samples a bounded,
 conditional distribution rather than the original Gaussian field.
+
+Both public constructors currently retain the Python backend as their default
+for backward compatibility with two-dimensional and non-zero-mean calls. For
+the validated one-dimensional, zero-mean profile, new integrations should
+select `engine='c'` or `backend='c'` explicitly. The default can move to C once
+the native engine supports the remaining public profiles without silent
+fallbacks.
 
 <p align="center">
    <img src="https://github.com/Zncl2222/Stochastic_SGSIM/blob/main/figure/Realizations.png"  width="40%"/>

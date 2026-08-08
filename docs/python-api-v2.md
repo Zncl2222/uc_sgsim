@@ -56,6 +56,11 @@ and spherical covariance, Simple Kriging, and a zero mean. The facade rejects
 unsupported combinations rather than silently selecting a different
 implementation.
 
+The constructor keeps `backend="python"` as a compatibility default while
+the native engine is limited to that profile. Use `backend="c"` explicitly
+for the validated native path; the default should change only after C can
+represent the remaining public configurations without changing their model.
+
 Ordinary Kriging remains available as a standalone interpolation estimator,
 but the unconditional simulator rejects it. Its sum-to-one constraint does not
 produce the conditional factorization of the configured stationary Gaussian

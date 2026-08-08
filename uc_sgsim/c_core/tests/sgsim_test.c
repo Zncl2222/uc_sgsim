@@ -191,6 +191,11 @@ UTEST(test, caller_owned_output_is_deterministic) {
         EXPECT_TRUE(isfinite(first[i]));
         EXPECT_EQ(first[i], second[i]);
     }
+
+    sgsim_t_free(&simulation);
+    EXPECT_TRUE(simulation.array == NULL);
+    EXPECT_TRUE(isfinite(first[0]));
+    EXPECT_TRUE(isfinite(second[0]));
 }
 
 UTEST(test, cholesky_solver_matches_two_neighbor_solution) {
@@ -427,6 +432,14 @@ UTEST(test, unsupported_and_invalid_options_return_status) {
     EXPECT_EQ(SGSIM_STATUS_INVALID_ARGUMENT, sgsim_run_checked(&simulation, &model, 0));
     model.use_cov_cache = 0;
     EXPECT_EQ(SGSIM_STATUS_UNSUPPORTED, sgsim_run_checked(&simulation, &model, 1));
+
+    simulation.if_alloc_memory = 1;
+    EXPECT_EQ(SGSIM_STATUS_INVALID_ARGUMENT, sgsim_run_checked(&simulation, &model, 0));
+    simulation.if_alloc_memory = 0;
+    simulation.array = NULL;
+    EXPECT_EQ(SGSIM_STATUS_INVALID_ARGUMENT, sgsim_run_checked(&simulation, &model, 0));
+
+    simulation.array = output;
     model.k_range = NAN;
     EXPECT_EQ(SGSIM_STATUS_INVALID_ARGUMENT, sgsim_run_checked(&simulation, &model, 0));
 }
