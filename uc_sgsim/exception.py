@@ -24,3 +24,7 @@ class IterationError(Exception):
     def __init__(self, message: str = default_message):
         self.message = message
         super().__init__(self.message)
+
+
+class NativeEngineError(RuntimeError):
+    """Raised when the native engine reports an invalid or numerical state."""

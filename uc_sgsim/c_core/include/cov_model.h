@@ -13,6 +13,12 @@
 #ifndef UC_SGSIM_C_CORE_INCLUDE_COV_MODEL_H_
 #define UC_SGSIM_C_CORE_INCLUDE_COV_MODEL_H_
 
+typedef enum {
+    COV_MODEL_GAUSSIAN = 0,
+    COV_MODEL_EXPONENTIAL = 1,
+    COV_MODEL_SPHERICAL = 2
+} cov_model_kind_t;
+
 /**
  * @struct cov_model_t
  * @brief Structure to hold covariance model parameters.
@@ -28,6 +34,7 @@ typedef struct {
     double k_range;        // kriging range
     double sill;           // sill value
     double nugget;         // nugget value
+    int kind;              // covariance model kind (cov_model_kind_t)
 } cov_model_t;
 
 /**

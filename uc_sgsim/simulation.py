@@ -10,7 +10,6 @@ from typing import Literal, Optional, Sequence, Tuple, Union
 import numpy as np
 
 from uc_sgsim.cov_model.base import CovModel
-from uc_sgsim.cov_model.model import Gaussian
 from uc_sgsim.kriging import Kriging, OrdinaryKriging, SimpleKriging
 from uc_sgsim.sgsim import UCSgsim
 
@@ -125,12 +124,7 @@ class SequentialGaussianSimulator:
             raise ValueError("backend must be either 'python' or 'c'")
         if backend == 'c' and not isinstance(self._grid_size, int):
             raise ValueError('the c backend currently supports only 1D grids')
-        if backend == 'c' and not isinstance(covariance, Gaussian):
-            raise ValueError('the c backend currently supports only Gaussian covariance')
-
         normalized_kriging, kriging_name = _normalize_kriging(kriging)
-        if backend == 'c' and kriging_name != 'SimpleKriging':
-            raise ValueError('the c backend currently supports only simple kriging')
 
         self._covariance = covariance
         self._kriging = normalized_kriging

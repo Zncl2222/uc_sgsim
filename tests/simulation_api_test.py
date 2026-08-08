@@ -179,14 +179,24 @@ def test_c_backend_rejects_unsupported_configuration(covariance):
     with pytest.raises(ValueError, match='1D'):
         uc.SequentialGaussianSimulator((3, 2), covariance, backend='c')
 
-    with pytest.raises(ValueError, match='simple kriging'):
-        uc.SequentialGaussianSimulator(3, covariance, backend='c', kriging='ordinary')
-
-    with pytest.raises(ValueError, match='Gaussian covariance'):
-        uc.SequentialGaussianSimulator(3, uc.Spherical(4, 1, 3), backend='c')
-
     with pytest.raises(ValueError, match='zero mean'):
         uc.SequentialGaussianSimulator(3, covariance, backend='c', mean=1)
+
+
+@pytest.mark.parametrize('model_class', [uc.Gaussian, uc.Exponential, uc.Spherical])
+@pytest.mark.parametrize('kriging', ['simple', 'ordinary'])
+def test_c_backend_supports_public_1d_models_and_kriging(model_class, kriging):
+    simulator = uc.SequentialGaussianSimulator(
+        8,
+        model_class(8, 1, 4, sill=1.7, nugget=0.2),
+        backend='c',
+        kriging=kriging,
+    )
+
+    result = simulator.simulate(2, seed=17)
+
+    assert result.shape == (2, 8, 1)
+    assert np.isfinite(result.values).all()
 
 
 def test_c_backend_result_has_the_same_shape_contract(covariance):
