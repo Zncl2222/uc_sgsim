@@ -20,7 +20,7 @@
 # include "../include/sort_tools.h"
 # include "../c_array_tools/src/c_array.h"
 
-static cov_model_t* model;
+static const cov_model_t* model;
 static double k_range;
 static double estimation;
 static double kriging_var;

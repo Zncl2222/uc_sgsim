@@ -10,6 +10,7 @@
  * License: MIT
  */
 
+# include <math.h>
 # include "../include/cov_model.h"
 
 void set_cov_model_default(cov_model_t* cov_model) {
@@ -18,7 +19,7 @@ void set_cov_model_default(cov_model_t* cov_model) {
     cov_model->bw = cov_model->bw_l / cov_model->bw_s;
 }
 
-void cov_compute(const double* x, double* cov, int n_dim, cov_model_t* cov_model) {
+void cov_compute(const double* x, double* cov, int n_dim, const cov_model_t* cov_model) {
     double partial_sill = cov_model->sill - cov_model->nugget;
     for (int i = 0; i < n_dim; i++) {
         double factor =
@@ -27,7 +28,7 @@ void cov_compute(const double* x, double* cov, int n_dim, cov_model_t* cov_model
     }
 }
 
-void cov_compute2d(const double** x , double* cov, int n_dim, cov_model_t* cov_model) {
+void cov_compute2d(double* const* x, double* cov, int n_dim, const cov_model_t* cov_model) {
     double partial_sill = cov_model->sill - cov_model->nugget;
     int index = 0;
     for (int i = 0; i < n_dim; i++) {
