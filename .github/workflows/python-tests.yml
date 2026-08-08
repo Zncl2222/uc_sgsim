@@ -127,6 +127,29 @@ jobs:
       - name: Build and test
         run: .\build_scripts\cmake_build.bat
 
+  c_sanitizer:
+    name: c-asan-ubsan
+    runs-on: ubuntu-latest
+    env:
+      ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+      UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pull Submodule
+        run: git submodule update --init --recursive
+      - name: Configure sanitizer build
+        run: >-
+          cmake -S . -B sanitizer-build
+          -DIS_EXECUTE=ON
+          -DUC_SGSIM_NATIVE_OPTIMIZATION=OFF
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+      - name: Build sanitizer targets
+        run: cmake --build sanitizer-build --parallel
+      - name: Run native tests with sanitizers
+        run: ./sanitizer-build/test/unittest
+
   python_coverage:
     name: codecov-py
     runs-on: ubuntu-latest

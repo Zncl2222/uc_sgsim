@@ -12,8 +12,8 @@
 #ifndef UC_SGSIM_C_CORE_INCLUDE_KRIGING_H_
 #define UC_SGSIM_C_CORE_INCLUDE_KRIGING_H_
 
-# include "../c_array_tools/src/c_array.h"
 # include "../include/cov_model.h"
+# include "../include/random_tools.h"
 
 /**
  * @struct sampling_state
@@ -23,25 +23,32 @@
  * including information about neighbors, current length, and sampled points.
  */
 typedef struct {
-    int neighbor;             // Number of neighbors considered.
-    int currlen;              // Current length of sampled points.
-    int idx;                  // Index used for sampling state.
-    double unsampled_point;   // Unsampling point during Kriging.
-    c_array_double sampled;   // Array to store sampled points.
-    c_array_double u_array;   // Array to store unsampled points.
+    int neighbor;           // Number of neighbors considered.
+    int currlen;            // Current length of sampled points.
+    int unsampled_point;    // Grid index currently being simulated.
+    int* sampled;           // Previously sampled grid indices.
 } sampling_state;
 
-/** Per-simulation scratch buffers used by kriging. */
+/** One candidate conditioning point. */
+typedef struct {
+    int grid_index;
+    double value;
+    double distance;
+} kriging_neighbor_t;
+
+/** Contiguous, per-simulation scratch buffers used by kriging. */
 typedef struct {
     const cov_model_t* model;
-    c_array_double location;
-    c_array_double location_cov;
-    c_array_double location_cov2d;
-    c_array_double flatten_temp;
-    c_array_double weights;
-    c_matrix_double distance_mat;
-    c_matrix_double pdist_temp;
-    c_matrix_double data_cov;
+    int matrix_stride;
+    kriging_neighbor_t* candidates;
+    double* covariance_vector;
+    double* covariance_matrix;
+    double* factor_matrix;
+    double* weights;
+    double* solve_temp;
+    double* unit_solution;
+    double kriging_std;
+    double diagonal_jitter;
 } kriging_workspace_t;
 
 /**
@@ -65,9 +72,8 @@ void sampling_state_free(sampling_state* sampling);
  *
  * @param sampling Pointer to the sampling_state structure to update.
  * @param unsampled_point The unsampled point to add.
- * @param idx Index of the unsampled point in the grid.
  */
-void sampling_state_update(sampling_state* sampling, double unsampled_point, int idx);
+void sampling_state_update(sampling_state* sampling, int unsampled_point);
 
 /**
  * @brief Set Kriging parameters for the simulation.
@@ -96,41 +102,14 @@ void kriging_workspace_free(kriging_workspace_t* workspace);
  * @param sampling Pointer to the sampling state.
  * @param rng_state Pointer to the random number generator state.
  * @param kriging_method Kriging method to use (e.g., ordinary kriging).
+ * @param use_solution_cache Reuse weights and standard deviation loaded by the caller.
  */
 int simple_kriging(
     double* array,
     sampling_state* sampling,
     kriging_workspace_t* workspace,
-    mt19937_state* rng_state,
+    sgsim_rng_t* rng_state,
     int kriging_method,
-    int use_cov_cache);
-
-/**
- * @brief Find neighbor points for Kriging.
- *
- * This function finds neighbor points for Kriging estimation based on the
- * sampling state.
- *
- * @param array Array of values.
- * @param sampling Pointer to the sampling state.
- * @param rng_state Pointer to the random number generator state.
- * @return true or false by 1 or 0 (true means there is a neighbor for kriging to interpolate)
- */
-int find_neighbor(
-    double* array,
-    sampling_state* sampling,
-    const kriging_workspace_t* workspace,
-    mt19937_state* rng_state);
-
-/**
- * @brief Augment a matrix for Ordinary Kriging.
- *
- * This function augments a matrix for Ordinary Kriging estimation based on the number
- * of neighbor points.
- *
- * @param mat Matrix to be augmented.
- * @param neighbor Number of neighbor points.
- */
-void matrix_augmented(double** mat, int neighbor);
+    int use_solution_cache);
 
 #endif  // UC_SGSIM_C_CORE_INCLUDE_KRIGING_H_

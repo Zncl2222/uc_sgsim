@@ -22,7 +22,7 @@
 typedef struct {
     c_array_int x_grid;
     c_array_double simulation;
-    c_array_double covariance_cache;
+    c_array_double solution_cache;
     sampling_state sampling;
     kriging_workspace_t kriging;
 } sgsim_workspace_t;
@@ -32,7 +32,7 @@ static const double DEFAULT_EPSILON = 1e-6;
 static void sgsim_workspace_free(sgsim_workspace_t* workspace) {
     free(workspace->x_grid.data);
     free(workspace->simulation.data);
-    free(workspace->covariance_cache.data);
+    free(workspace->solution_cache.data);
     sampling_state_free(&workspace->sampling);
     kriging_workspace_free(&workspace->kriging);
     *workspace = (sgsim_workspace_t){0};
@@ -42,17 +42,21 @@ static int sgsim_workspace_init(
     sgsim_workspace_t* workspace,
     int x_len,
     const cov_model_t* cov_model) {
-    c_array_init(&workspace->x_grid, x_len);
-    c_array_init(&workspace->simulation, x_len);
-
     size_t cache_stride = (size_t)cov_model->max_neighbor + 1;
+    if (cov_model->use_cov_cache
+        && (size_t)x_len > SIZE_MAX / cache_stride) {
+        return 0;
+    }
     size_t cache_size = cov_model->use_cov_cache
         ? (size_t)x_len * cache_stride : 1;
-    c_array_init(&workspace->covariance_cache, cache_size);
+
+    c_array_init(&workspace->x_grid, x_len);
+    c_array_init(&workspace->simulation, x_len);
+    c_array_init(&workspace->solution_cache, cache_size);
 
     if (workspace->x_grid.data == NULL
         || workspace->simulation.data == NULL
-        || workspace->covariance_cache.data == NULL
+        || workspace->solution_cache.data == NULL
         || !sampling_state_init(&workspace->sampling, x_len)
         || !kriging_workspace_init(&workspace->kriging, x_len, cov_model)) {
         sgsim_workspace_free(workspace);
@@ -132,26 +136,30 @@ void set_sgsim_defaults(sgsim_t* sgsim, cov_model_t* cov_model) {
     sgsim->iteration_limit = sgsim->iteration_limit == 0 ? 10 : sgsim->iteration_limit;
 }
 
-static void load_cached_covariance(
+static void load_cached_solution(
     sgsim_workspace_t* workspace,
     int path_index,
     int neighbor_count,
     int cache_stride) {
     for (int j = 0; j < neighbor_count; j++) {
-        workspace->kriging.location_cov.data[j] =
-            workspace->covariance_cache.data[path_index * cache_stride + j];
+        workspace->kriging.weights[j] =
+            workspace->solution_cache.data[path_index * cache_stride + j];
     }
+    workspace->kriging.kriging_std =
+        workspace->solution_cache.data[path_index * cache_stride + neighbor_count];
 }
 
-static void store_cached_covariance(
+static void store_cached_solution(
     sgsim_workspace_t* workspace,
     int path_index,
     int neighbor_count,
     int cache_stride) {
     for (int j = 0; j < neighbor_count; j++) {
-        workspace->covariance_cache.data[path_index * cache_stride + j] =
-            workspace->kriging.location_cov.data[j];
+        workspace->solution_cache.data[path_index * cache_stride + j] =
+            workspace->kriging.weights[j];
     }
+    workspace->solution_cache.data[path_index * cache_stride + neighbor_count] =
+        workspace->kriging.kriging_std;
 }
 
 sgsim_status_t sgsim_run_checked(
@@ -194,8 +202,8 @@ sgsim_status_t sgsim_run_checked(
         return SGSIM_STATUS_ALLOCATION_FAILED;
     }
 
-    mt19937_state rng_state;
-    mt19937_init(&rng_state, sgsim->randomseed);
+    sgsim_rng_t rng_state;
+    sgsim_rng_init(&rng_state, sgsim->randomseed);
     int count = 0;
     int error_times = 0;
     int cache_stride = resolved_model.max_neighbor + 1;
@@ -210,29 +218,29 @@ sgsim_status_t sgsim_run_checked(
         }
 
         for (int i = 0; i < sgsim->x_len; i++) {
-            int use_covariance_cache = resolved_model.use_cov_cache && count > 0;
-            if (use_covariance_cache) {
-                load_cached_covariance(
+            int use_solution_cache = resolved_model.use_cov_cache && count > 0;
+            if (use_solution_cache) {
+                load_cached_solution(
                     &workspace,
                     i,
                     workspace.sampling.neighbor,
                     cache_stride);
             }
 
-            sampling_state_update(&workspace.sampling, workspace.x_grid.data[i], i);
+            sampling_state_update(&workspace.sampling, workspace.x_grid.data[i]);
             if (simple_kriging(
                     workspace.simulation.data,
                     &workspace.sampling,
                     &workspace.kriging,
                     &rng_state,
                     sgsim->kriging_method,
-                    use_covariance_cache) != 0) {
+                    use_solution_cache) != 0) {
                 status = SGSIM_STATUS_NUMERICAL_ERROR;
                 goto cleanup;
             }
 
             if (resolved_model.use_cov_cache && count == 0) {
-                store_cached_covariance(
+                store_cached_solution(
                     &workspace,
                     i,
                     workspace.sampling.neighbor,
@@ -254,7 +262,7 @@ sgsim_status_t sgsim_run_checked(
             if (workspace.sampling.neighbor < resolved_model.max_neighbor) {
                 workspace.sampling.neighbor++;
             }
-            workspace.sampling.sampled.data[i] = grid_index;
+            workspace.sampling.sampled[i] = grid_index;
             workspace.sampling.currlen++;
         }
 

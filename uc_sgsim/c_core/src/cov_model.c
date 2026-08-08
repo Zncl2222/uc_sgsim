@@ -19,7 +19,7 @@ void set_cov_model_default(cov_model_t* cov_model) {
     cov_model->bw = cov_model->bw_l / cov_model->bw_s;
 }
 
-static double covariance_at_lag(double lag, const cov_model_t* cov_model) {
+double cov_model_at_lag(double lag, const cov_model_t* cov_model) {
     if (lag == 0.0) {
         return cov_model->sill;
     }
@@ -43,7 +43,7 @@ static double covariance_at_lag(double lag, const cov_model_t* cov_model) {
 
 void cov_compute(const double* x, double* cov, int n_dim, const cov_model_t* cov_model) {
     for (int i = 0; i < n_dim; i++) {
-        cov[i] = covariance_at_lag(x[i], cov_model);
+        cov[i] = cov_model_at_lag(x[i], cov_model);
     }
 }
 
@@ -51,7 +51,7 @@ void cov_compute2d(double* const* x, double* cov, int n_dim, const cov_model_t* 
     int index = 0;
     for (int i = 0; i < n_dim; i++) {
         for (int j = 0; j < n_dim; j++) {
-            cov[index] = covariance_at_lag(x[i][j], cov_model);
+            cov[index] = cov_model_at_lag(x[i][j], cov_model);
             index++;
         }
     }

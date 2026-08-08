@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import time
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from ctypes import CDLL, POINTER, c_char_p, c_double, c_int
 from typing import Literal, Optional
@@ -323,8 +324,8 @@ class UCSgsim(SgsimField):
         if n_process == 1:
             simulation = [self._simulation_c(rand_list[0])]
         else:
-            with Pool(processes=n_process) as pool:
-                simulation = pool.starmap(self._simulation_c, zip(rand_list))
+            with ThreadPoolExecutor(max_workers=n_process) as executor:
+                simulation = list(executor.map(self._simulation_c, rand_list))
 
         self._reshape_simulaiton(simulation, n_process)
 

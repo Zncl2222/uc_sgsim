@@ -46,6 +46,9 @@ typedef struct {
  */
 void set_cov_model_default(cov_model_t* cov_model);
 
+/** Calculate one covariance value at a non-negative lag distance. */
+double cov_model_at_lag(double lag, const cov_model_t* cov_model);
+
 /**
  * @brief Calculate covariance for a one-dimensional dataset.
  *

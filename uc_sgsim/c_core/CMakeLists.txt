@@ -13,8 +13,11 @@ endif()
 # Include header files
 include_directories(include/)
 
-# Set compiler optimization flags
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3")
+option(
+    UC_SGSIM_NATIVE_OPTIMIZATION
+    "Enable native engine release optimization"
+    ON
+)
 
 # Link each file
 add_library(
@@ -30,12 +33,28 @@ add_library(
     src/variogram.c
 )
 
+set_target_properties(
+    uc_sgsim
+    PROPERTIES
+        C_STANDARD 11
+        C_STANDARD_REQUIRED ON
+        C_EXTENSIONS ON
+)
+
+if(UC_SGSIM_NATIVE_OPTIMIZATION)
+    if(MSVC)
+        target_compile_options(uc_sgsim PRIVATE /O2)
+    else()
+        target_compile_options(uc_sgsim PRIVATE -O3)
+    endif()
+endif()
+
+if(NOT WIN32)
+    target_link_libraries(uc_sgsim PRIVATE m)
+endif()
+
 # compile and install the shared library
 if(NOT DEFINED IS_EXECUTE OR NOT IS_EXECUTE)
     install(TARGETS uc_sgsim DESTINATION "${CMAKE_SOURCE_DIR}/uc_sgsim/c_core/")
     set_target_properties(uc_sgsim PROPERTIES PREFIX "")
-else()
-    if(NOT WIN32)
-        target_link_libraries(uc_sgsim PRIVATE m)
-    endif()
 endif()

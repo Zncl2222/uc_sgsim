@@ -234,6 +234,157 @@ UTEST(test, caller_owned_output_is_deterministic) {
     }
 }
 
+UTEST(test, cholesky_solver_matches_two_neighbor_solution) {
+    double values[] = {2.0, 0.0, 0.0, 0.0, -1.0};
+    cov_model_t model = {
+        .bw_l = 5,
+        .bw_s = 1,
+        .max_neighbor = 2,
+        .k_range = 4.0,
+        .sill = 1.7,
+        .nugget = 0.2,
+        .kind = COV_MODEL_EXPONENTIAL,
+    };
+    sampling_state sampling;
+    kriging_workspace_t workspace;
+    sgsim_rng_t rng_state;
+    EXPECT_TRUE(sampling_state_init(&sampling, 5));
+    EXPECT_TRUE(kriging_workspace_init(&workspace, 5, &model));
+
+    sampling.sampled[0] = 0;
+    sampling.sampled[1] = 4;
+    sampling.currlen = 2;
+    sampling.neighbor = 2;
+    sampling_state_update(&sampling, 2);
+    sgsim_rng_init(&rng_state, 2026);
+
+    EXPECT_EQ(
+        0,
+        simple_kriging(
+            values,
+            &sampling,
+            &workspace,
+            &rng_state,
+            SGSIM_KRIGING_SIMPLE,
+            0));
+
+    double target_covariance = cov_model_at_lag(2.0, &model);
+    double sample_covariance = cov_model_at_lag(4.0, &model);
+    double expected_weight = target_covariance / (model.sill + sample_covariance);
+    double expected_variance =
+        model.sill - 2.0 * expected_weight * target_covariance;
+    EXPECT_NEAR(expected_weight, workspace.weights[0], 1e-12);
+    EXPECT_NEAR(expected_weight, workspace.weights[1], 1e-12);
+    EXPECT_NEAR(sqrt(expected_variance), workspace.kriging_std, 1e-12);
+    EXPECT_EQ(0.0, workspace.diagonal_jitter);
+
+    sampling_state_free(&sampling);
+    kriging_workspace_free(&workspace);
+}
+
+UTEST(test, ordinary_solver_matches_two_neighbor_solution) {
+    double values[] = {2.0, 0.0, 0.0, 0.0, -1.0};
+    cov_model_t model = {
+        .bw_l = 5,
+        .bw_s = 1,
+        .max_neighbor = 2,
+        .k_range = 4.0,
+        .sill = 1.7,
+        .nugget = 0.2,
+        .kind = COV_MODEL_EXPONENTIAL,
+    };
+    sampling_state sampling;
+    kriging_workspace_t workspace;
+    sgsim_rng_t rng_state;
+    EXPECT_TRUE(sampling_state_init(&sampling, 5));
+    EXPECT_TRUE(kriging_workspace_init(&workspace, 5, &model));
+
+    sampling.sampled[0] = 0;
+    sampling.sampled[1] = 4;
+    sampling.currlen = 2;
+    sampling.neighbor = 2;
+    sampling_state_update(&sampling, 2);
+    sgsim_rng_init(&rng_state, 2026);
+
+    EXPECT_EQ(
+        0,
+        simple_kriging(
+            values,
+            &sampling,
+            &workspace,
+            &rng_state,
+            SGSIM_KRIGING_ORDINARY,
+            0));
+
+    double target_covariance = cov_model_at_lag(2.0, &model);
+    double sample_covariance = cov_model_at_lag(4.0, &model);
+    double lagrange_multiplier =
+        target_covariance - 0.5 * (model.sill + sample_covariance);
+    double expected_variance =
+        model.sill - target_covariance - lagrange_multiplier;
+    EXPECT_NEAR(0.5, workspace.weights[0], 1e-12);
+    EXPECT_NEAR(0.5, workspace.weights[1], 1e-12);
+    EXPECT_NEAR(sqrt(expected_variance), workspace.kriging_std, 1e-12);
+    EXPECT_EQ(0.0, workspace.diagonal_jitter);
+
+    sampling_state_free(&sampling);
+    kriging_workspace_free(&workspace);
+}
+
+UTEST(test, cholesky_solver_regularizes_singular_covariance) {
+    double values[] = {1.0, -1.0, 0.0};
+    cov_model_t model = {
+        .bw_l = 3,
+        .bw_s = 1,
+        .max_neighbor = 2,
+        .k_range = 1e12,
+        .sill = 1.0,
+        .kind = COV_MODEL_GAUSSIAN,
+    };
+    sampling_state sampling;
+    kriging_workspace_t workspace;
+    sgsim_rng_t rng_state;
+    EXPECT_TRUE(sampling_state_init(&sampling, 3));
+    EXPECT_TRUE(kriging_workspace_init(&workspace, 3, &model));
+
+    sampling.sampled[0] = 0;
+    sampling.sampled[1] = 1;
+    sampling.currlen = 2;
+    sampling.neighbor = 2;
+    sampling_state_update(&sampling, 2);
+    sgsim_rng_init(&rng_state, 2026);
+
+    EXPECT_EQ(
+        0,
+        simple_kriging(
+            values,
+            &sampling,
+            &workspace,
+            &rng_state,
+            SGSIM_KRIGING_SIMPLE,
+            0));
+    EXPECT_TRUE(workspace.diagonal_jitter > 0.0);
+    EXPECT_TRUE(isfinite(values[2]));
+
+    sampling_state_free(&sampling);
+    kriging_workspace_free(&workspace);
+}
+
+UTEST(test, random_path_can_retain_or_swap_last_position) {
+    int retained = 0;
+    int swapped = 0;
+    for (unsigned int seed = 0; seed < 128; seed++) {
+        int path[] = {0, 1};
+        sgsim_rng_t rng_state;
+        sgsim_rng_init(&rng_state, seed);
+        randompath(path, 2, &rng_state);
+        retained += path[0] == 0;
+        swapped += path[0] == 1;
+    }
+    EXPECT_GT(retained, 0);
+    EXPECT_GT(swapped, 0);
+}
+
 UTEST(test, unsupported_and_invalid_options_return_status) {
     double output[4];
     sgsim_t simulation = {

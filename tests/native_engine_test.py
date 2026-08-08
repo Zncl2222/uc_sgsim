@@ -56,8 +56,7 @@ def test_native_ensemble_matches_covariance_contract(model_class):
 
     assert np.all(np.abs(empirical_mean) <= 6 * mean_standard_error)
     assert np.all(
-        np.abs(empirical_covariance - expected_covariance)
-        <= 6 * covariance_standard_error,
+        np.abs(empirical_covariance - expected_covariance) <= 6 * covariance_standard_error,
     )
 
 
