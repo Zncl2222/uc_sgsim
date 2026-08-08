@@ -14,8 +14,6 @@
 # include "../include/cov_model.h"
 
 void set_cov_model_default(cov_model_t* cov_model) {
-    cov_model->max_neighbor = cov_model->max_neighbor == 0 ? 4 : cov_model->max_neighbor;
-    cov_model->sill = cov_model->sill == 0 ? 1 : cov_model->sill;
     cov_model->bw = cov_model->bw_l / cov_model->bw_s;
 }
 

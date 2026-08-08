@@ -132,17 +132,13 @@ C example file
 # endif
 
 int main() {
-    // you can also set z_min and z_max at sgsim_t. Default value will depend on
-    // sill value in cov_model_t
-    sgsim_t sgsim_example = {
-        .x_len = 150,
-        .realization_numbers = 5,
-        .randomseed = 12345,
-        .kriging_method = 1,
-        .if_alloc_memory = 1,  // This should be equal to 1 if you want to run by c.
-    };
+    sgsim_t sgsim_example;
+    sgsim_init_defaults(&sgsim_example);
+    sgsim_example.x_len = 150;
+    sgsim_example.realization_numbers = 5;
+    sgsim_example.randomseed = 12345;
+    sgsim_example.if_alloc_memory = 1;
 
-    // you can also set max_negibor at cov_model_t. Defualt value is 4.
     cov_model_t cov_example = {
         .bw_l = 35,
         .bw_s = 1,
@@ -150,9 +146,16 @@ int main() {
         .use_cov_cache = 0,
         .sill = 1,
         .nugget = 0,
+        .max_neighbor = 8,
+        .kind = COV_MODEL_GAUSSIAN,
     };
 
-    sgsim_run(&sgsim_example, &cov_example, 0);
+    sgsim_status_t status = sgsim_run_checked(&sgsim_example, &cov_example, 0);
+    if (status != SGSIM_STATUS_OK) {
+        fprintf(stderr, "%s\n", sgsim_status_message(status));
+        sgsim_t_free(&sgsim_example);
+        return 1;
+    }
     sgsim_t_free(&sgsim_example);
     PAUSE
     return 0;
@@ -163,7 +166,7 @@ int main() {
 * 2D unconditional randomfield generation
 * GUI (pyhton)
 * More covariance models
-* More kriging methods (etc. Oridinary Kriging)
+* Additional simulation models with explicit mathematical validation
 * Performance enhancement
 * Providing more comprehensive documentation and user-friendly design improvements.
 

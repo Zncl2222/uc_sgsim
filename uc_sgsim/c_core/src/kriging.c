@@ -96,8 +96,14 @@ int kriging_workspace_init(
     int x_len,
     const cov_model_t* cov_model) {
     *workspace = (kriging_workspace_t){0};
-    if (x_len <= 0 || cov_model->max_neighbor <= 0) {
+    if (x_len <= 0 || cov_model->max_neighbor < 0) {
         return 0;
+    }
+
+    workspace->model = cov_model;
+    workspace->matrix_stride = cov_model->max_neighbor;
+    if (cov_model->max_neighbor == 0) {
+        return 1;
     }
 
     size_t neighbor_count = (size_t)cov_model->max_neighbor;
@@ -110,23 +116,19 @@ int kriging_workspace_init(
         return 0;
     }
 
-    workspace->model = cov_model;
-    workspace->matrix_stride = cov_model->max_neighbor;
     workspace->candidates = calloc((size_t)x_len, sizeof(*workspace->candidates));
     workspace->covariance_vector = calloc(neighbor_count, sizeof(double));
     workspace->covariance_matrix = calloc(matrix_size, sizeof(double));
     workspace->factor_matrix = calloc(matrix_size, sizeof(double));
     workspace->weights = calloc(neighbor_count, sizeof(double));
     workspace->solve_temp = calloc(neighbor_count, sizeof(double));
-    workspace->unit_solution = calloc(neighbor_count, sizeof(double));
 
     if (workspace->candidates == NULL
         || workspace->covariance_vector == NULL
         || workspace->covariance_matrix == NULL
         || workspace->factor_matrix == NULL
         || workspace->weights == NULL
-        || workspace->solve_temp == NULL
-        || workspace->unit_solution == NULL) {
+        || workspace->solve_temp == NULL) {
         kriging_workspace_free(workspace);
         return 0;
     }
@@ -269,7 +271,6 @@ static void build_covariance_system(
 
 static int solve_kriging_system(
     kriging_workspace_t* workspace,
-    int kriging_method,
     int neighbor_count) {
     build_covariance_system(workspace, neighbor_count);
     if (!factor_covariance(workspace, neighbor_count)) {
@@ -284,40 +285,25 @@ static int solve_kriging_system(
         return 0;
     }
 
-    double lagrange_multiplier = 0.0;
-    if (kriging_method == 1) {
-        if (!solve_factor(
-                workspace,
-                NULL,
-                1,
-                workspace->unit_solution,
-                neighbor_count)) {
-            return 0;
-        }
-
-        double weight_sum = 0.0;
-        double unit_sum = 0.0;
-        for (int index = 0; index < neighbor_count; index++) {
-            weight_sum += workspace->weights[index];
-            unit_sum += workspace->unit_solution[index];
-        }
-        if (!isfinite(unit_sum) || fabs(unit_sum) <= DBL_MIN) {
-            return 0;
-        }
-        lagrange_multiplier = (weight_sum - 1.0) / unit_sum;
-        for (int index = 0; index < neighbor_count; index++) {
-            workspace->weights[index] -=
-                lagrange_multiplier * workspace->unit_solution[index];
-        }
-    }
-
     double explained_variance = 0.0;
     for (int index = 0; index < neighbor_count; index++) {
         explained_variance +=
             workspace->weights[index] * workspace->covariance_vector[index];
     }
-    double kriging_variance =
-        workspace->model->sill - explained_variance - lagrange_multiplier;
+    double kriging_variance = workspace->model->sill - explained_variance;
+    if (workspace->diagonal_jitter > 0.0) {
+        double weighted_covariance = 0.0;
+        int stride = workspace->matrix_stride;
+        for (int row = 0; row < neighbor_count; row++) {
+            for (int column = 0; column < neighbor_count; column++) {
+                weighted_covariance += workspace->weights[row]
+                    * workspace->covariance_matrix[row * stride + column]
+                    * workspace->weights[column];
+            }
+        }
+        kriging_variance = workspace->model->sill
+            - 2.0 * explained_variance + weighted_covariance;
+    }
     double tolerance = fmax(fabs(workspace->model->sill), DBL_MIN) * 1e-10;
     if (!isfinite(kriging_variance) || kriging_variance < -tolerance) {
         return 0;
@@ -331,7 +317,6 @@ int simple_kriging(
     sampling_state* sampling,
     kriging_workspace_t* workspace,
     sgsim_rng_t* rng_state,
-    int kriging_method,
     int use_solution_cache) {
     if (sampling->neighbor == 0) {
         workspace->kriging_std = sqrt(workspace->model->sill);
@@ -345,7 +330,7 @@ int simple_kriging(
 
     prepare_neighbors(array, sampling, workspace);
     if (!use_solution_cache
-        && !solve_kriging_system(workspace, kriging_method, sampling->neighbor)) {
+        && !solve_kriging_system(workspace, sampling->neighbor)) {
         return 1;
     }
 
@@ -377,6 +362,5 @@ void kriging_workspace_free(kriging_workspace_t* workspace) {
     free(workspace->factor_matrix);
     free(workspace->weights);
     free(workspace->solve_temp);
-    free(workspace->unit_solution);
     *workspace = (kriging_workspace_t){0};
 }

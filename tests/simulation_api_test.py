@@ -77,14 +77,25 @@ def test_worker_count_is_capped_to_useful_processes(covariance):
     [
         ('simple', 'SimpleKriging'),
         ('SimpleKriging', 'SimpleKriging'),
-        ('ordinary', 'OrdinaryKriging'),
-        ('ordinary_kriging', 'OrdinaryKriging'),
     ],
 )
 def test_kriging_names_are_normalized(covariance, name, expected):
     simulator = uc.SequentialGaussianSimulator(4, covariance, kriging=name)
 
     assert simulator.kriging == expected
+
+
+@pytest.mark.parametrize('kriging', ['ordinary', 'ordinary_kriging'])
+def test_unconditional_api_rejects_ordinary_kriging_names(covariance, kriging):
+    with pytest.raises(ValueError, match='unconditional stationary SGS'):
+        uc.SequentialGaussianSimulator(4, covariance, kriging=kriging)
+
+
+def test_unconditional_api_rejects_configured_ordinary_kriging(covariance):
+    kriging = uc.OrdinaryKriging(covariance, 4)
+
+    with pytest.raises(ValueError, match='unconditional stationary SGS'):
+        uc.SequentialGaussianSimulator(4, covariance, kriging=kriging)
 
 
 def test_configured_kriging_object_is_supported(covariance):
@@ -184,13 +195,11 @@ def test_c_backend_rejects_unsupported_configuration(covariance):
 
 
 @pytest.mark.parametrize('model_class', [uc.Gaussian, uc.Exponential, uc.Spherical])
-@pytest.mark.parametrize('kriging', ['simple', 'ordinary'])
-def test_c_backend_supports_public_1d_models_and_kriging(model_class, kriging):
+def test_c_backend_supports_public_1d_models(model_class):
     simulator = uc.SequentialGaussianSimulator(
         8,
         model_class(8, 1, 4, sill=1.7, nugget=0.2),
         backend='c',
-        kriging=kriging,
     )
 
     result = simulator.simulate(2, seed=17)

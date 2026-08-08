@@ -41,7 +41,9 @@ class CovModel:
         Args:
             bandwidth_len (float): The length of the bandwidth.
             bandwidth_step (float): The step size for bandwidth increments.
-            k_range (float): The range parameter for the covariance model.
+            k_range (float): Practical/effective range for Gaussian and
+                exponential models, where correlation is ``exp(-3)``;
+                exact finite range for the spherical model.
             sill (float, optional): The sill parameter for the covariance model (default is 1).
             nugget (float, optional): The nugget effect parameter for the covariance model
                                       (default is 0).

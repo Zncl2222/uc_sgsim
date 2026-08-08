@@ -93,6 +93,32 @@ class TestConditionalGaussianOracle:
         assert standard_deviation**2 == pytest.approx(expected_variance, abs=1e-13)
         np.testing.assert_array_equal(sampled, sampled_before)
 
+    def test_jittered_simple_kriging_uses_general_error_variance(self):
+        model = Gaussian(10, 1, 4, sill=1.7, nugget=0.2)
+        kriging = SimpleKriging(model, 3)
+        target = np.array([1.0, 0.0])
+        sampled = np.array(
+            [
+                [0.0, 0.0, 1.2, 0.0],
+                [0.0, 0.0, 1.2, 0.0],
+            ],
+        )
+        covariance = model.cov_compute(cdist(sampled[:, :2], sampled[:, :2]))
+        cross_covariance = model.cov_compute(
+            cdist(sampled[:, :2], target[None, :]),
+        ).ravel()
+
+        with pytest.warns(RuntimeWarning, match='diagonal jitter'):
+            _, standard_deviation = kriging.prediction(target, sampled)
+
+        regularized = covariance + np.eye(2) * kriging._last_diagonal_jitter
+        weights = np.linalg.solve(regularized, cross_covariance)
+        expected_variance = (
+            model.sill - 2.0 * weights @ cross_covariance + weights @ covariance @ weights
+        )
+        assert kriging._last_diagonal_jitter > 0.0
+        assert standard_deviation**2 == pytest.approx(expected_variance, abs=1e-13)
+
     def test_ordinary_kriging_variance_includes_lagrange_multiplier(self):
         model = Gaussian(10, 1, 3, sill=1.0)
         kriging = OrdinaryKriging(model, 2)
@@ -194,6 +220,16 @@ class TestConditionalGaussianOracle:
 
 @pytest.mark.scientific
 class TestSimulationContract:
+    @pytest.mark.parametrize(
+        'kriging',
+        ['OrdinaryKriging', OrdinaryKriging(Gaussian(10, 1, 3), 5)],
+    )
+    def test_unconditional_simulation_rejects_ordinary_kriging(self, kriging):
+        model = Gaussian(10, 1, 3)
+
+        with pytest.raises(ValueError, match='unconditional stationary SGS'):
+            UCSgsim(5, 1, model, kriging=kriging)
+
     def test_default_simulation_is_not_tail_truncated(self):
         model = Gaussian(10, 1, 3)
         simulation = UCSgsim(5, 1, model, mean=3.0)

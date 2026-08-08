@@ -60,14 +60,12 @@ def test_native_ensemble_matches_covariance_contract(model_class):
     )
 
 
-@pytest.mark.parametrize('kriging', ['SimpleKriging', 'OrdinaryKriging'])
-def test_native_covariance_cache_preserves_results(kriging):
+def test_native_covariance_cache_preserves_results():
     model = uc.Exponential(12, 1, 5, sill=1.7, nugget=0.2)
     options = {
         'grid_size': 24,
         'covariance': model,
         'backend': 'c',
-        'kriging': kriging,
         'constant_path': True,
         'max_neighbors': 8,
     }
@@ -78,6 +76,93 @@ def test_native_covariance_cache_preserves_results(kriging):
     actual = cached.simulate(8, seed=321).values
 
     np.testing.assert_array_equal(actual, expected)
+
+
+@pytest.mark.parametrize('backend', ['python', 'c'])
+@pytest.mark.parametrize(
+    ('nugget', 'max_neighbors'),
+    [
+        (0.2, 0),
+        (1.7, 5),
+    ],
+)
+def test_no_conditioning_and_pure_nugget_are_white_noise(
+    backend,
+    nugget,
+    max_neighbors,
+):
+    realization_count = 6000
+    node_count = 5
+    sill = 1.7
+    model = uc.Gaussian(10, 1, 10, sill=sill, nugget=nugget)
+    simulator = uc.SequentialGaussianSimulator(
+        node_count,
+        model,
+        backend=backend,
+        max_neighbors=max_neighbors,
+    )
+
+    values = simulator.simulate(realization_count, seed=20260808).values[:, :, 0]
+    expected_covariance = np.eye(node_count) * sill
+    empirical_mean = values.mean(axis=0)
+    empirical_covariance = np.cov(values, rowvar=False, ddof=1)
+    mean_standard_error = np.sqrt(sill / realization_count)
+    covariance_standard_error = np.sqrt(
+        (
+            expected_covariance**2
+            + np.outer(np.diag(expected_covariance), np.diag(expected_covariance))
+        )
+        / (realization_count - 1),
+    )
+
+    assert np.all(np.abs(empirical_mean) <= 6 * mean_standard_error)
+    assert np.all(
+        np.abs(empirical_covariance - expected_covariance) <= 6 * covariance_standard_error,
+    )
+
+
+@pytest.mark.parametrize(
+    ('model_class', 'k_range'),
+    [
+        (uc.Exponential, 3),
+        (uc.Gaussian, 8),
+    ],
+)
+@pytest.mark.parametrize('constant_path', [False, True])
+def test_finite_neighborhood_path_statistics(model_class, k_range, constant_path):
+    realization_count = 6000
+    node_count = 12
+    sill = 1.7
+    model = model_class(12, 1, k_range, sill=sill, nugget=0.2)
+    simulator = uc.SequentialGaussianSimulator(
+        node_count,
+        model,
+        backend='c',
+        max_neighbors=4,
+        constant_path=constant_path,
+    )
+
+    values = simulator.simulate(
+        realization_count,
+        seed=20260808,
+    ).values[:, :, 0]
+    empirical_mean = values.mean(axis=0)
+    centered = values - empirical_mean
+    empirical_variance = np.sum(centered**2, axis=0) / (realization_count - 1)
+    empirical_lag_one = np.sum(centered[:, :-1] * centered[:, 1:], axis=0) / (realization_count - 1)
+    expected_lag_one = float(model.cov_compute(1.0))
+
+    mean_standard_error = np.sqrt(sill / realization_count)
+    variance_standard_error = np.sqrt(2 * sill**2 / (realization_count - 1))
+    lag_standard_error = np.sqrt(
+        (expected_lag_one**2 + sill**2) / (realization_count - 1),
+    )
+
+    assert np.all(np.abs(empirical_mean) <= 5 * mean_standard_error)
+    assert np.all(np.abs(empirical_variance - sill) <= 5 * variance_standard_error)
+    assert np.all(
+        np.abs(empirical_lag_one - expected_lag_one) <= 5 * lag_standard_error,
+    )
 
 
 def test_native_iteration_limit_is_visible_to_python():

@@ -13,7 +13,7 @@ import numpy as np
 from uc_sgsim.random_field import SgsimField
 from uc_sgsim.cov_model import Exponential, Gaussian, Spherical
 from uc_sgsim.cov_model.base import CovModel
-from uc_sgsim.kriging import Kriging, OrdinaryKriging
+from uc_sgsim.kriging import Kriging
 from uc_sgsim.utils import CovModelStructure, SgsimStructure
 from .exception import IterationError, NativeEngineError
 
@@ -42,10 +42,9 @@ class UCSgsim(SgsimField):
             of two integers for a 2D grid.
         realization_number (int): The number of realizations to generate.
         model (CovModel): The covariance model used for the simulation.
-        kriging (str | Kriging, optional): The kriging method used for
-            interpolation, either a string specifying the method
-            ('SimpleKriging' or 'OrdinaryKriging') or a custom Kriging
-            object. Defaults to 'SimpleKriging'.
+        kriging (str | Kriging, optional): Simple Kriging configuration.
+            Ordinary Kriging is available for standalone interpolation but is
+            rejected by this unconditional stationary simulator.
         engine (Literal['python', 'c'], optional): The engine to run
             the simulation ('python' or 'c'). Defaults to 'python'.
         mean (float, optional): Known global mean for Simple Kriging.
@@ -346,7 +345,7 @@ class UCSgsim(SgsimField):
         mlen = int(self.x_size)
         realization_number = int(self.realization_number // self.n_process)
         random_field = np.empty([realization_number, self.x_size], dtype=np.float64)
-        kriging = int(isinstance(self.kriging, OrdinaryKriging))
+        kriging = 0
         try:
             covariance_kind = _COVARIANCE_MODEL_KIND[type(self.model)]
         except KeyError as error:

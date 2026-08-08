@@ -126,100 +126,6 @@ class TestUCSgsim:
                     'cov_cache': True,
                 },
             ),
-            ('OrdinaryKriging', gaussian, 1, {}),
-            ('OrdinaryKriging', exponential, 1, {}),
-            ('OrdinaryKriging', spherical, 1, {}),
-            ('OrdinaryKriging', gaussian, 1, {'max_value': 4, 'min_value': -4, 'max_neighbor': 6}),
-            (
-                'OrdinaryKriging',
-                exponential,
-                1,
-                {'max_value': 4, 'min_value': -4, 'max_neighbor': 6},
-            ),
-            ('OrdinaryKriging', spherical, 1, {'max_value': 4, 'min_value': -4, 'max_neighbor': 6}),
-            (
-                'OrdinaryKriging',
-                gaussian,
-                1,
-                {
-                    'max_value': 3,
-                    'min_value': -3,
-                    'max_neighbor': 12,
-                    'constant_path': True,
-                    'cov_cache': True,
-                },
-            ),
-            (
-                'OrdinaryKriging',
-                exponential,
-                1,
-                {
-                    'max_value': 4,
-                    'min_value': -4,
-                    'max_neighbor': 12,
-                    'constant_path': True,
-                    'cov_cache': True,
-                },
-            ),
-            (
-                'OrdinaryKriging',
-                spherical,
-                1,
-                {
-                    'max_value': 3,
-                    'min_value': -3,
-                    'max_neighbor': 12,
-                    'constant_path': True,
-                    'cov_cache': True,
-                },
-            ),
-            ('OrdinaryKriging', gaussian, 2, {}),
-            ('OrdinaryKriging', exponential, 2, {}),
-            ('OrdinaryKriging', spherical, 2, {}),
-            ('OrdinaryKriging', gaussian, 2, {'max_value': 3, 'min_value': -3, 'max_neighbor': 6}),
-            (
-                'OrdinaryKriging',
-                exponential,
-                2,
-                {'max_value': 4, 'min_value': -4, 'max_neighbor': 6},
-            ),
-            ('OrdinaryKriging', spherical, 2, {'max_value': 3, 'min_value': -3, 'max_neighbor': 6}),
-            (
-                'OrdinaryKriging',
-                gaussian,
-                2,
-                {
-                    'max_value': 4,
-                    'min_value': -4,
-                    'max_neighbor': 8,
-                    'constant_path': True,
-                    'cov_cache': True,
-                },
-            ),
-            (
-                'OrdinaryKriging',
-                exponential,
-                2,
-                {
-                    'max_value': 4,
-                    'min_value': -4,
-                    'max_neighbor': 8,
-                    'constant_path': True,
-                    'cov_cache': True,
-                },
-            ),
-            (
-                'OrdinaryKriging',
-                spherical,
-                2,
-                {
-                    'max_value': 4,
-                    'min_value': -4,
-                    'max_neighbor': 8,
-                    'constant_path': True,
-                    'cov_cache': True,
-                },
-            ),
         ],
     )
     def test_uc_sgsim_gaussian_py(self, kriging, cov_model, n_process, kwargs):
@@ -316,100 +222,6 @@ class TestUCSgsim:
                     'cov_cache': True,
                 },
             ),
-            ('OrdinaryKriging', gaussian, 1, {}),
-            ('OrdinaryKriging', exponential, 1, {}),
-            ('OrdinaryKriging', spherical, 1, {}),
-            ('OrdinaryKriging', gaussian, 1, {'max_value': 6, 'min_value': -6, 'max_neighbor': 6}),
-            (
-                'OrdinaryKriging',
-                exponential,
-                1,
-                {'max_value': 6, 'min_value': -6, 'max_neighbor': 6},
-            ),
-            ('OrdinaryKriging', spherical, 1, {'max_value': 6, 'min_value': -6, 'max_neighbor': 6}),
-            (
-                'OrdinaryKriging',
-                gaussian,
-                1,
-                {
-                    'max_value': 6,
-                    'min_value': -6,
-                    'max_neighbor': 12,
-                    'constant_path': True,
-                    'cov_cache': True,
-                },
-            ),
-            (
-                'OrdinaryKriging',
-                exponential,
-                1,
-                {
-                    'max_value': 6,
-                    'min_value': -6,
-                    'max_neighbor': 12,
-                    'constant_path': True,
-                    'cov_cache': True,
-                },
-            ),
-            (
-                'OrdinaryKriging',
-                spherical,
-                1,
-                {
-                    'max_value': 6,
-                    'min_value': -6,
-                    'max_neighbor': 12,
-                    'constant_path': True,
-                    'cov_cache': True,
-                },
-            ),
-            ('OrdinaryKriging', gaussian, 2, {}),
-            ('OrdinaryKriging', exponential, 2, {}),
-            ('OrdinaryKriging', spherical, 2, {}),
-            ('OrdinaryKriging', gaussian, 2, {'max_value': 6, 'min_value': -6, 'max_neighbor': 6}),
-            (
-                'OrdinaryKriging',
-                exponential,
-                2,
-                {'max_value': 6, 'min_value': -6, 'max_neighbor': 6},
-            ),
-            ('OrdinaryKriging', spherical, 2, {'max_value': 6, 'min_value': -6, 'max_neighbor': 6}),
-            (
-                'OrdinaryKriging',
-                gaussian,
-                2,
-                {
-                    'max_value': 6,
-                    'min_value': -6,
-                    'max_neighbor': 8,
-                    'constant_path': True,
-                    'cov_cache': True,
-                },
-            ),
-            (
-                'OrdinaryKriging',
-                exponential,
-                2,
-                {
-                    'max_value': 6,
-                    'min_value': -6,
-                    'max_neighbor': 8,
-                    'constant_path': True,
-                    'cov_cache': True,
-                },
-            ),
-            (
-                'OrdinaryKriging',
-                spherical,
-                2,
-                {
-                    'max_value': 6,
-                    'min_value': -6,
-                    'max_neighbor': 8,
-                    'constant_path': True,
-                    'cov_cache': True,
-                },
-            ),
         ],
     )
     def test_uc_sgsim_gaussian_c(self, kriging, cov_model, n_process, kwargs):
@@ -418,6 +230,15 @@ class TestUCSgsim:
         sgsim.get_variogram(n_processes=n_process)
         self.sgsim_plot(sgsim)
         self.sgsim_save(sgsim)
+
+    @pytest.mark.parametrize('engine', ['python', 'c'])
+    @pytest.mark.parametrize(
+        'kriging',
+        ['OrdinaryKriging', uc.OrdinaryKriging(gaussian, X)],
+    )
+    def test_unconditional_simulator_rejects_ordinary_kriging(self, engine, kriging):
+        with pytest.raises(ValueError, match='unconditional stationary SGS'):
+            uc.UCSgsim(X, nR, gaussian, kriging=kriging, engine=engine)
 
     def test_uc_wrong_kriging_method(self):
         with pytest.raises(TypeError):

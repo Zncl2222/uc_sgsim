@@ -46,7 +46,6 @@ typedef struct {
     double* factor_matrix;
     double* weights;
     double* solve_temp;
-    double* unit_solution;
     double kriging_std;
     double diagonal_jitter;
 } kriging_workspace_t;
@@ -96,12 +95,11 @@ void kriging_workspace_free(kriging_workspace_t* workspace);
  * @brief Perform simple Kriging to estimate values at unsampled points.
  *
  * This function performs simple Kriging to estimate values at unsampled points
- * based on the sampling state, random number generator state, and Kriging method.
+ * based on the sampling state and random number generator state.
  *
  * @param array Array to store estimated values.
  * @param sampling Pointer to the sampling state.
  * @param rng_state Pointer to the random number generator state.
- * @param kriging_method Kriging method to use (e.g., ordinary kriging).
  * @param use_solution_cache Reuse weights and standard deviation loaded by the caller.
  */
 int simple_kriging(
@@ -109,7 +107,6 @@ int simple_kriging(
     sampling_state* sampling,
     kriging_workspace_t* workspace,
     sgsim_rng_t* rng_state,
-    int kriging_method,
     int use_solution_cache);
 
 #endif  // UC_SGSIM_C_CORE_INCLUDE_KRIGING_H_

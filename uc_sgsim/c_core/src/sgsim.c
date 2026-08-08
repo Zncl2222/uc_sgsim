@@ -27,8 +27,6 @@ typedef struct {
     kriging_workspace_t kriging;
 } sgsim_workspace_t;
 
-static const double DEFAULT_EPSILON = 1e-6;
-
 static void sgsim_workspace_free(sgsim_workspace_t* workspace) {
     free(workspace->x_grid.data);
     free(workspace->simulation.data);
@@ -89,8 +87,10 @@ static sgsim_status_t validate_arguments(
         || sgsim->realization_numbers <= 0) {
         return SGSIM_STATUS_INVALID_ARGUMENT;
     }
-    if (sgsim->kriging_method != SGSIM_KRIGING_SIMPLE
-        && sgsim->kriging_method != SGSIM_KRIGING_ORDINARY) {
+    if (sgsim->kriging_method == SGSIM_KRIGING_ORDINARY) {
+        return SGSIM_STATUS_UNSUPPORTED;
+    }
+    if (sgsim->kriging_method != SGSIM_KRIGING_SIMPLE) {
         return SGSIM_STATUS_INVALID_ARGUMENT;
     }
     if (sgsim->if_alloc_memory != 0 && sgsim->if_alloc_memory != 1) {
@@ -109,8 +109,9 @@ static sgsim_status_t validate_arguments(
     if (!isfinite(cov_model->k_range)
         || !isfinite(cov_model->sill)
         || !isfinite(cov_model->nugget)
-        || cov_model->sill < 0.0
-        || cov_model->nugget < 0.0) {
+        || cov_model->sill <= 0.0
+        || cov_model->nugget < 0.0
+        || cov_model->nugget > cov_model->sill) {
         return SGSIM_STATUS_INVALID_ARGUMENT;
     }
     if (!covariance_model_is_valid(cov_model->kind)) {
@@ -125,14 +126,20 @@ static sgsim_status_t validate_arguments(
     return SGSIM_STATUS_OK;
 }
 
+void sgsim_init_defaults(sgsim_t* sgsim) {
+    if (sgsim == NULL) {
+        return;
+    }
+    *sgsim = (sgsim_t){
+        .kriging_method = SGSIM_KRIGING_SIMPLE,
+        .iteration_limit = 10,
+        .z_min = -INFINITY,
+        .z_max = INFINITY,
+    };
+}
+
 void set_sgsim_defaults(sgsim_t* sgsim, cov_model_t* cov_model) {
     set_cov_model_default(cov_model);
-    double boundary_value = sqrt(cov_model->sill) * 4.0;
-
-    sgsim->z_min = fabs(sgsim->z_min) < DEFAULT_EPSILON
-        ? -boundary_value : sgsim->z_min;
-    sgsim->z_max = fabs(sgsim->z_max) < DEFAULT_EPSILON
-        ? boundary_value : sgsim->z_max;
     sgsim->iteration_limit = sgsim->iteration_limit == 0 ? 10 : sgsim->iteration_limit;
 }
 
@@ -175,8 +182,7 @@ sgsim_status_t sgsim_run_checked(
     set_sgsim_defaults(sgsim, &resolved_model);
     resolved_model.max_neighbor = resolved_model.max_neighbor > sgsim->x_len
         ? sgsim->x_len : resolved_model.max_neighbor;
-    if (resolved_model.nugget > resolved_model.sill
-        || sgsim->z_min >= sgsim->z_max) {
+    if (sgsim->z_min >= sgsim->z_max) {
         return SGSIM_STATUS_INVALID_ARGUMENT;
     }
 
@@ -233,7 +239,6 @@ sgsim_status_t sgsim_run_checked(
                     &workspace.sampling,
                     &workspace.kriging,
                     &rng_state,
-                    sgsim->kriging_method,
                     use_solution_cache) != 0) {
                 status = SGSIM_STATUS_NUMERICAL_ERROR;
                 goto cleanup;

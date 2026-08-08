@@ -48,6 +48,7 @@ class Kriging:
         self.x_size = grid_size if isinstance(grid_size, int) else grid_size[0]
         self.y_size = 0 if isinstance(grid_size, int) else grid_size[1]
         self._cov_cache_flag = cov_cache
+        self._last_diagonal_jitter = 0.0
         if cov_cache is True:
             self._cov_cache = {}
 
@@ -102,6 +103,7 @@ class Kriging:
         covariance_size: int | None = None,
     ) -> np.ndarray:
         """Solve a kriging system, adding only scale-aware fallback jitter."""
+        self._last_diagonal_jitter = 0.0
         try:
             return np.linalg.solve(matrix, vector)
         except np.linalg.LinAlgError as original_error:
@@ -126,6 +128,7 @@ class Kriging:
                     RuntimeWarning,
                     stacklevel=2,
                 )
+                self._last_diagonal_jitter = jitter
                 return solution
 
             raise np.linalg.LinAlgError(

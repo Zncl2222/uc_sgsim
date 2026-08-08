@@ -38,9 +38,11 @@ typedef struct {
 } cov_model_t;
 
 /**
- * @brief Set default values for a covariance model.
+ * @brief Resolve derived covariance-model values.
  *
- * This function sets default values for a covariance model if they are not already specified.
+ * This function computes ``bw`` from ``bw_l`` and ``bw_s``. It does not use
+ * zero-valued scientific parameters as implicit defaults: in particular,
+ * ``max_neighbor == 0`` explicitly disables neighborhood conditioning.
  *
  * @param cov_model A pointer to a cov_model_t structure to be initialized.
  */

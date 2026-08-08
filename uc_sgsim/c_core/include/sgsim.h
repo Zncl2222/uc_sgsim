@@ -17,6 +17,7 @@
 
 typedef enum {
     SGSIM_KRIGING_SIMPLE = 0,
+    /** Reserved for ABI compatibility; unconditional OK is unsupported. */
     SGSIM_KRIGING_ORDINARY = 1
 } sgsim_kriging_method_t;
 
@@ -50,8 +51,16 @@ typedef struct {
 } sgsim_t;
 
 /**
- * @brief Set default values for an sgsim_t structure.
+ * Initialize a simulation request with explicit, scientifically neutral defaults.
+ * The resulting bounds are unbounded and the kriging method is Simple Kriging.
+ */
+void sgsim_init_defaults(sgsim_t* sgsim);
+
+/**
+ * @brief Resolve legacy execution defaults for an sgsim_t structure.
  *
+ * This function does not alter ``z_min`` or ``z_max``. Use
+ * ``sgsim_init_defaults`` or set both bounds explicitly.
  * @param sgsim Pointer to an sgsim_t structure to set defaults for.
  * @param cov_model Pointer to the covariance model to be used.
  */

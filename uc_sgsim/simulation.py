@@ -89,8 +89,10 @@ class SequentialGaussianSimulator:
     Args:
         grid_size: A positive 1D size or a two-item ``(x, y)`` size.
         covariance: Covariance model used by kriging.
-        kriging: ``"simple"``, ``"ordinary"``, their legacy class names,
-            or a configured :class:`Kriging` instance.
+        kriging: ``"simple"``, ``"SimpleKriging"``, or a configured
+            :class:`SimpleKriging` instance. Ordinary Kriging is an
+            interpolation estimator and is not a valid conditional
+            factorization of this stationary unconditional Gaussian model.
         backend: Simulation backend, either ``"python"`` or ``"c"``.
         mean: Known global mean used by simple kriging.
         max_neighbors: Maximum number of previously sampled neighbors.
@@ -252,20 +254,28 @@ def _normalize_kriging(
 ) -> Tuple[KrigingConfiguration, str]:
     if isinstance(kriging, str):
         normalized = kriging.lower().replace('_', '').replace('-', '').replace(' ', '')
+        if normalized in ('ordinary', 'ordinarykriging'):
+            raise ValueError(
+                'Ordinary Kriging is not supported for unconditional stationary SGS; '
+                'use Simple Kriging',
+            )
         names = {
             'simple': 'SimpleKriging',
             'simplekriging': 'SimpleKriging',
-            'ordinary': 'OrdinaryKriging',
-            'ordinarykriging': 'OrdinaryKriging',
         }
         try:
             name = names[normalized]
         except KeyError as error:
-            raise ValueError("kriging must be either 'simple' or 'ordinary'") from error
+            raise ValueError("kriging must be 'simple'") from error
         return name, name
-    if not isinstance(kriging, (SimpleKriging, OrdinaryKriging)):
+    if isinstance(kriging, OrdinaryKriging):
+        raise ValueError(
+            'Ordinary Kriging is not supported for unconditional stationary SGS; '
+            'use Simple Kriging',
+        )
+    if not isinstance(kriging, SimpleKriging):
         raise TypeError(
-            'kriging must be a name or a SimpleKriging/OrdinaryKriging instance',
+            'kriging must be a name or a SimpleKriging instance',
         )
     return kriging, type(kriging).__name__
 

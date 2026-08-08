@@ -67,7 +67,12 @@ class SimpleKriging(Kriging):
         weights = self._solve_system(cov_data, cov_dist)
         residuals = sampled[:, 2] - self.mean
         estimation = self.mean + float(np.dot(weights, residuals))
-        kriging_var = self.model.sill - float(np.dot(weights, cov_dist))
+        explained_variance = float(np.dot(weights, cov_dist))
+        kriging_var = self.model.sill - explained_variance
+        if self._last_diagonal_jitter > 0.0:
+            kriging_var = (
+                self.model.sill - 2.0 * explained_variance + float(weights @ cov_data @ weights)
+            )
 
         return float(estimation), self._standard_deviation(kriging_var)
 
@@ -209,7 +214,12 @@ class OrdinaryKriging(SimpleKriging):
         lagrange_multiplier = float(solution[-1])
 
         estimation = float(np.dot(weights, sampled[:, 2]))
-        kriging_var = self.model.sill - float(np.dot(weights, cov_dist)) - lagrange_multiplier
+        explained_variance = float(np.dot(weights, cov_dist))
+        kriging_var = self.model.sill - explained_variance - lagrange_multiplier
+        if self._last_diagonal_jitter > 0.0:
+            kriging_var = (
+                self.model.sill - 2.0 * explained_variance + float(weights @ cov_data @ weights)
+            )
 
         return estimation, self._standard_deviation(kriging_var)
 

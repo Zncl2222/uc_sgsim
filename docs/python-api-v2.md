@@ -51,6 +51,12 @@ can migrate one call site at a time.
 The new facade delegates to `UCSgsim`, so this API change does not alter the
 validated covariance, kriging, Python simulation, or C simulation formulas.
 
-The C backend currently supports only one-dimensional grids, Gaussian
-covariance, simple kriging, and a zero mean. The facade rejects unsupported
-combinations rather than silently selecting a different implementation.
+The C backend currently supports one-dimensional grids, Gaussian, exponential,
+and spherical covariance, Simple Kriging, and a zero mean. The facade rejects
+unsupported combinations rather than silently selecting a different
+implementation.
+
+Ordinary Kriging remains available as a standalone interpolation estimator,
+but the unconditional simulator rejects it. Its sum-to-one constraint does not
+produce the conditional factorization of the configured stationary Gaussian
+field.

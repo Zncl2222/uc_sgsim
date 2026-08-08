@@ -56,7 +56,7 @@ def main() -> None:
     print(f'workers={args.workers}')
     print('backend  kriging   cache  median_seconds')
     for backend in backends:
-        for kriging in ('simple', 'ordinary'):
+        for kriging in ('simple',):
             for cache in (False, True):
                 duration = measure(args, backend, kriging, cache)
                 print(

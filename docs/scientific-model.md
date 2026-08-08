@@ -12,10 +12,11 @@ with a stationary Gaussian random field and Simple Kriging (SK).
 does not mean that nodes are independent: every previously simulated node may
 condition the next node.
 
-Ordinary Kriging (OK) remains available as a practical unknown-mean variant,
-but it is not the exact conditional factorization of a fixed-mean Gaussian
-field. The legacy C backend is retained for compatibility and is not currently
-part of this scientific reference contract.
+Ordinary Kriging (OK) remains available as a standalone interpolation
+estimator, but it is rejected by the unconditional simulator. Its sum-to-one
+constraint is not the conditional factorization of the configured stationary
+Gaussian field. Both the Python and native simulation backends implement the
+Simple Kriging contract below.
 
 ## Covariance and semivariogram contract
 
@@ -109,34 +110,6 @@ $$
 
 where \(L\) is the lower Cholesky factor.
 
-## Ordinary Kriging variance
-
-For the covariance-form OK system
-
-$$
-\begin{bmatrix}
-K & \mathbf 1\\
-\mathbf 1^\mathsf{T} & 0
-\end{bmatrix}
-\begin{bmatrix}
-\lambda\\
-\nu
-\end{bmatrix}
-=
-\begin{bmatrix}
-k\\
-1
-\end{bmatrix},
-$$
-
-the error variance is
-
-$$
-\sigma_{\mathrm{OK}}^2=C(0)-\lambda^\mathsf{T}k-\nu.
-$$
-
-The Lagrange multiplier term must not be omitted.
-
 ## Numerical policy
 
 - Kriging values and simulated values are scalar Python floats.
@@ -144,6 +117,10 @@ The Lagrange multiplier term must not be omitted.
 - If the solve reports a singular matrix, a scale-aware diagonal jitter starts
   near machine precision and increases only as needed. A runtime warning reports
   the actual jitter.
+- When jitter is required, conditional variance is evaluated with the general
+  expression $C(0)-2\lambda^\mathsf{T}k+\lambda^\mathsf{T}K\lambda$ using the
+  unregularized covariance matrix. The $C(0)-\lambda^\mathsf{T}k$ shortcut is
+  used only for an unregularized solve.
 - A negative conditional variance is clipped only when its magnitude is within
   \(10^{-10}\) of the sill scale. A more negative result raises a diagnostic
   error instead of silently changing the distribution.
@@ -160,6 +137,9 @@ previously simulated node. Selected Gaussian and exponential neighbors are not
 silently discarded beyond their practical range because those covariance
 functions remain non-zero there.
 
+`max_neighbor=0` explicitly disables conditioning and produces independent
+$N(m, C(0))$ draws. It is never interpreted as an unset/default value.
+
 Random paths are useful with truncated neighborhoods to reduce directional
 artifacts. For a full conditioning set, any fixed permutation is a valid
 factorization of the same joint Gaussian distribution.
@@ -170,12 +150,18 @@ factorization of the same joint Gaussian distribution.
 
 1. covariance and semivariogram behavior at the nugget discontinuity;
 2. SK conditional mean and variance against independent block-Gaussian algebra;
-3. OK variance including the Lagrange multiplier;
+3. explicit rejection of OK by the unconditional simulator;
 4. fixed-score, full-neighborhood SGS against direct Cholesky sampling;
 5. ensemble mean and covariance against five-standard-error Gaussian sampling
    bounds using a fixed random seed;
 6. retention of non-zero covariance beyond a practical range;
-7. unbounded defaults and negative-variance diagnostics.
+7. unbounded defaults, zero-valued bounds, and negative-variance diagnostics;
+8. finite neighborhoods with random and fixed paths over multiple
+   range-to-domain ratios.
+
+The legacy experimental variogram estimator is intended for exploratory plots,
+not as the scientific acceptance oracle. Regression tests use direct ensemble
+covariance or exact-lag semivariance with explicit sample counts.
 
 Run the scientific contract with:
 
