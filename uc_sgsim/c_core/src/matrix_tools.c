@@ -18,6 +18,7 @@
 # include "../include/matrix_tools.h"
 # include "../c_array_tools/src/c_array.h"
 # ifdef __WIN32__
+# include <direct.h>
 # include <io.h>
 # elif defined(__linux__) || defined(__unix__)
 # include <fcntl.h>

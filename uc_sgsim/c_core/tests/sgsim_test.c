@@ -175,14 +175,13 @@ UTEST(test, sgsim_max_iteration) {
 }
 
 UTEST(test, variance) {
-    double** arr;
-    arr = malloc(20 * sizeof(double));
+    double arr[20];
     for (int i = 0; i < 20; i++) {
         arr[i] = i + i * 2;
     }
 
     double var = variance(arr, 20);
-    free(arr);
+    EXPECT_NEAR(299.25, var, 1e-12);
 }
 
 UTEST_MAIN();

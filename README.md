@@ -2,45 +2,9 @@
 ![python](https://img.shields.io/pypi/pyversions/uc-sgsim)
 [![ci](https://img.shields.io/github/actions/workflow/status/Zncl2222/uc_sgsim/github-pre-commit.yml?logo=pre-commit&label=pre-commit)](https://github.com/Zncl2222/Stochastic_UC_SGSIM/actions/workflows/github-pre-commit.yml)
 [![build](https://img.shields.io/github/actions/workflow/status/Zncl2222/uc_sgsim/cmake.yml?logo=cmake&logoColor=red&label=CMake)](https://github.com/Zncl2222/Stochastic_UC_SGSIM/actions/workflows/cmake.yml)
-[![pytest](https://img.shields.io/github/actions/workflow/status/Zncl2222/uc_sgsim/sonarcloud.yml?logo=pytest&label=pytest)](https://github.com/Zncl2222/Stochastic_UC_SGSIM/actions/workflows/sonarcloud.yml)
+[![pytest](https://img.shields.io/github/actions/workflow/status/Zncl2222/uc_sgsim/python-tests.yml?logo=pytest&label=pytest)](https://github.com/Zncl2222/uc_sgsim/actions/workflows/python-tests.yml)
 [![build](https://github.com/Zncl2222/Stochastic_UC_SGSIM/actions/workflows/codeql.yml/badge.svg)](https://github.com/Zncl2222/Stochastic_UC_SGSIM/actions/workflows/codeql.yml)
 [![codecov](https://codecov.io/gh/Zncl2222/uc_sgsim/branch/main/graph/badge.svg?token=3qZt0OqDNI)](https://codecov.io/gh/Zncl2222/uc_sgsim)
-
-<div>
- <table>
-  <thead>
-    <tr>
-      <td colspan="5" align="center"><strong>Sonar Cloud Quality</strong></td>
-    </tr>
-    <tr>
-      <th>Metric</th>
-      <th>Python</th>
-      <th>C</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td><strong>Quality Gate</strong></td>
-      <td><a href="https://sonarcloud.io/summary/new_code?id=zncl2222_Stochastic_UC_SGSIM_py"><img src="https://sonarcloud.io/api/project_badges/measure?project=zncl2222_Stochastic_UC_SGSIM_py&metric=alert_status" alt="Quality Gate Status"></a></td>
-      <td><a href="https://sonarcloud.io/summary/new_code?id=zncl2222_Stochastic_UC_SGSIM_c"><img src="https://sonarcloud.io/api/project_badges/measure?project=zncl2222_Stochastic_UC_SGSIM_c&metric=alert_status" alt="Quality Gate Status"></a></td>
-    <tr>
-      <td><strong>Reliability Rating</strong></td>
-      <td><a href="https://sonarcloud.io/summary/new_code?id=zncl2222_Stochastic_UC_SGSIM_py"><img src="https://sonarcloud.io/api/project_badges/measure?project=zncl2222_Stochastic_UC_SGSIM_py&metric=reliability_rating" alt="Reliability Rating"></a></td>
-      <td><a href="https://sonarcloud.io/summary/new_code?id=zncl2222_Stochastic_UC_SGSIM_c"><img src="https://sonarcloud.io/api/project_badges/measure?project=zncl2222_Stochastic_UC_SGSIM_c&metric=reliability_rating" alt="Reliability Rating"></a></td>
-    </tr>
-    <tr>
-      <td><strong>Security Rating</strong></td>
-      <td><a href="https://sonarcloud.io/summary/new_code?id=zncl2222_Stochastic_UC_SGSIM_py"><img src="https://sonarcloud.io/api/project_badges/measure?project=zncl2222_Stochastic_UC_SGSIM_py&metric=security_rating" alt="Security Rating"></a></td>
-      <td><a href="https://sonarcloud.io/summary/new_code?id=zncl2222_Stochastic_UC_SGSIM_c"><img src="https://sonarcloud.io/api/project_badges/measure?project=zncl2222_Stochastic_UC_SGSIM_c&metric=security_rating" alt="Security Rating"></a></td>
-    </tr>
-    <tr>
-      <td><strong>Maintainability Rating</strong></td>
-      <td><a href="https://sonarcloud.io/summary/new_code?id=zncl2222_Stochastic_UC_SGSIM_py"><img src="https://sonarcloud.io/api/project_badges/measure?project=zncl2222_Stochastic_UC_SGSIM_py&metric=sqale_rating" alt="Maintainability Rating"></a></td>
-      <td><a href="https://sonarcloud.io/summary/new_code?id=zncl2222_Stochastic_UC_SGSIM_c"><img src="https://sonarcloud.io/api/project_badges/measure?project=zncl2222_Stochastic_UC_SGSIM_c&metric=sqale_rating" alt="Maintainability Rating"></a></td>
-    </tr>
-  </tbody>
- </table>
-</div>
 
 <h3 align="center">
 
@@ -87,6 +51,10 @@ the model equations, numerical safeguards, tests, and current limitations.
 ```bash
 pip install uc-sgsim
 ```
+
+New Python integrations should prefer the result-oriented
+[`SequentialGaussianSimulator` API](docs/python-api-v2.md). The existing
+`UCSgsim` API remains available for incremental migration.
 
 ## Features
 * One-dimensional unconditional random-field generation using SGS

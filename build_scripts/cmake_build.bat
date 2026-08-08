@@ -1,16 +1,23 @@
 @echo off
+setlocal
 
-mkdir cbuild
-cd cbuild
+set "build_dir=cbuild"
+set "is_execute=ON"
 
-IF /I "%1"=="-s" (
-  cmake -DIS_EXECUTE=OFF -G "MinGW Makefiles" ..
-  make
-  %~dp0cbuild/c_example.exe
-) ELSE (
-  cmake -DIS_EXECUTE=ON -G "MinGW Makefiles" ..
+if /I "%~1"=="-s" (
+  set "is_execute=OFF"
 )
 
-cd ..
+cmake -S . -B "%build_dir%" -DIS_EXECUTE=%is_execute% -G "MinGW Makefiles"
+if errorlevel 1 exit /b 1
 
-exit /b 0
+cmake --build "%build_dir%" --parallel
+if errorlevel 1 exit /b 1
+
+if /I "%is_execute%"=="ON" (
+  echo.| "%build_dir%\c_example.exe"
+  if errorlevel 1 exit /b 1
+
+  "%build_dir%\test\unittest.exe"
+  if errorlevel 1 exit /b 1
+)
