@@ -308,25 +308,25 @@ def _validate_configured_kriging(
 
 def _positive_int(value: int, name: str) -> int:
     if isinstance(value, bool) or not isinstance(value, (int, np.integer)) or value <= 0:
-        raise ValueError(f"{name} must be a positive integer")
+        raise ValueError(f'{name} must be a positive integer')
     return int(value)
 
 
 def _non_negative_int(value: int, name: str) -> int:
     if isinstance(value, bool) or not isinstance(value, (int, np.integer)) or value < 0:
-        raise ValueError(f"{name} must be a non-negative integer")
+        raise ValueError(f'{name} must be a non-negative integer')
     return int(value)
 
 
 def _finite_float(value: float, name: str) -> float:
     if isinstance(value, (bool, np.bool_)):
-        raise TypeError(f"{name} must be a finite number")
+        raise TypeError(f'{name} must be a finite number')
     try:
         number = float(value)
     except (TypeError, ValueError) as error:
-        raise TypeError(f"{name} must be a finite number") from error
+        raise TypeError(f'{name} must be a finite number') from error
     if not np.isfinite(number):
-        raise ValueError(f"{name} must be a finite number")
+        raise ValueError(f'{name} must be a finite number')
     return number
 
 
@@ -336,7 +336,7 @@ def _optional_finite_float(value: Optional[float], name: str) -> Optional[float]
 
 def _boolean(value: bool, name: str) -> bool:
     if not isinstance(value, (bool, np.bool_)):
-        raise TypeError(f"{name} must be a boolean")
+        raise TypeError(f'{name} must be a boolean')
     return bool(value)
 
 
