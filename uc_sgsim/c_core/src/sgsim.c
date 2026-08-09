@@ -15,22 +15,25 @@
 
 # include "../include/cov_model.h"
 # include "../include/kriging.h"
+# include "../include/native_array.h"
 # include "../include/random_tools.h"
 # include "../include/sgsim.h"
-# include "../c_array_tools/src/c_array.h"
 
 typedef struct {
-    c_array_int x_grid;
-    c_array_double simulation;
-    c_array_double solution_cache;
+    sgsim_int_array_t x_grid;
+    sgsim_double_array_t simulation;
+    sgsim_double_array_t solution_cache;
     sampling_state sampling;
     kriging_workspace_t kriging;
 } sgsim_workspace_t;
 
 static void sgsim_workspace_free(sgsim_workspace_t* workspace) {
-    free(workspace->x_grid.data);
-    free(workspace->simulation.data);
-    free(workspace->solution_cache.data);
+    if (workspace == NULL) {
+        return;
+    }
+    sgsim_int_array_free(&workspace->x_grid);
+    sgsim_double_array_free(&workspace->simulation);
+    sgsim_double_array_free(&workspace->solution_cache);
     sampling_state_free(&workspace->sampling);
     kriging_workspace_free(&workspace->kriging);
     *workspace = (sgsim_workspace_t){0};
@@ -40,6 +43,10 @@ static int sgsim_workspace_init(
     sgsim_workspace_t* workspace,
     int x_len,
     const cov_model_t* cov_model) {
+    if (workspace == NULL || cov_model == NULL || x_len <= 0) {
+        return 0;
+    }
+    *workspace = (sgsim_workspace_t){0};
     size_t cache_stride = (size_t)cov_model->max_neighbor + 1;
     if (cov_model->use_cov_cache
         && (size_t)x_len > SIZE_MAX / cache_stride) {
@@ -48,21 +55,20 @@ static int sgsim_workspace_init(
     size_t cache_size = cov_model->use_cov_cache
         ? (size_t)x_len * cache_stride : 1;
 
-    c_array_init(&workspace->x_grid, x_len);
-    c_array_init(&workspace->simulation, x_len);
-    c_array_init(&workspace->solution_cache, cache_size);
-
-    if (workspace->x_grid.data == NULL
-        || workspace->simulation.data == NULL
-        || workspace->solution_cache.data == NULL
+    if (sgsim_int_array_init(
+            &workspace->x_grid,
+            (size_t)x_len) != SGSIM_NUMERIC_OK
+        || sgsim_double_array_init(
+            &workspace->simulation,
+            (size_t)x_len) != SGSIM_NUMERIC_OK
+        || sgsim_double_array_init(
+            &workspace->solution_cache,
+            cache_size) != SGSIM_NUMERIC_OK
+        || sgsim_int_array_iota(&workspace->x_grid) != SGSIM_NUMERIC_OK
         || !sampling_state_init(&workspace->sampling, x_len)
         || !kriging_workspace_init(&workspace->kriging, x_len, cov_model)) {
         sgsim_workspace_free(workspace);
         return 0;
-    }
-
-    for (int i = 0; i < x_len; i++) {
-        workspace->x_grid.data[i] = i;
     }
     return 1;
 }
@@ -84,6 +90,7 @@ static sgsim_status_t validate_arguments(
         return SGSIM_STATUS_UNSUPPORTED;
     }
     if (sgsim->x_len <= 0 || sgsim->x_len > INT_MAX - 2
+        || sgsim->randomseed < 0
         || sgsim->realization_numbers <= 0) {
         return SGSIM_STATUS_INVALID_ARGUMENT;
     }
@@ -151,25 +158,27 @@ static void load_cached_solution(
     sgsim_workspace_t* workspace,
     int path_index,
     int neighbor_count,
-    int cache_stride) {
+    size_t cache_stride) {
+    size_t cache_offset = (size_t)path_index * cache_stride;
     for (int j = 0; j < neighbor_count; j++) {
-        workspace->kriging.weights[j] =
-            workspace->solution_cache.data[path_index * cache_stride + j];
+        workspace->kriging.weights.data[j] =
+            workspace->solution_cache.data[cache_offset + (size_t)j];
     }
     workspace->kriging.kriging_std =
-        workspace->solution_cache.data[path_index * cache_stride + neighbor_count];
+        workspace->solution_cache.data[cache_offset + (size_t)neighbor_count];
 }
 
 static void store_cached_solution(
     sgsim_workspace_t* workspace,
     int path_index,
     int neighbor_count,
-    int cache_stride) {
+    size_t cache_stride) {
+    size_t cache_offset = (size_t)path_index * cache_stride;
     for (int j = 0; j < neighbor_count; j++) {
-        workspace->solution_cache.data[path_index * cache_stride + j] =
-            workspace->kriging.weights[j];
+        workspace->solution_cache.data[cache_offset + (size_t)j] =
+            workspace->kriging.weights.data[j];
     }
-    workspace->solution_cache.data[path_index * cache_stride + neighbor_count] =
+    workspace->solution_cache.data[cache_offset + (size_t)neighbor_count] =
         workspace->kriging.kriging_std;
 }
 
@@ -206,14 +215,18 @@ sgsim_status_t sgsim_run_checked(
 
     sgsim_workspace_t workspace = {0};
     if (!sgsim_workspace_init(&workspace, sgsim->x_len, &resolved_model)) {
+        if (sgsim->if_alloc_memory == 1) {
+            free(sgsim->array);
+            sgsim->array = NULL;
+        }
         return SGSIM_STATUS_ALLOCATION_FAILED;
     }
 
     sgsim_rng_t rng_state;
-    sgsim_rng_init(&rng_state, sgsim->randomseed);
+    sgsim_rng_init(&rng_state, (unsigned int)sgsim->randomseed);
     int count = 0;
     int error_times = 0;
-    int cache_stride = resolved_model.max_neighbor + 1;
+    size_t cache_stride = (size_t)resolved_model.max_neighbor + 1U;
 
     while (count < sgsim->realization_numbers) {
         workspace.sampling.currlen = 0;
@@ -268,7 +281,7 @@ sgsim_status_t sgsim_run_checked(
             if (workspace.sampling.neighbor < resolved_model.max_neighbor) {
                 workspace.sampling.neighbor++;
             }
-            workspace.sampling.sampled[i] = grid_index;
+            workspace.sampling.sampled.data[i] = grid_index;
             workspace.sampling.currlen++;
         }
 

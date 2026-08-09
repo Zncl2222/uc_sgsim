@@ -13,7 +13,6 @@
 #define UC_SGSIM_C_CORE_INCLUDE_SGSIM_H_
 
 # include "cov_model.h"
-# include "../c_array_tools/src/c_array.h"
 
 typedef enum {
     SGSIM_KRIGING_SIMPLE = 0,

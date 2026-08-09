@@ -93,6 +93,6 @@ void matrixform(const double* x, double**matrix, int n_dim);
  * @param curr_n The current file number in the series.
  */
 void save_1darray(const double* array, int array_size,
-                char* fhead, char* path, int total_n, int curr_n);
+                const char* fhead, const char* path, int total_n, int curr_n);
 
 #endif  // UC_SGSIM_C_CORE_INCLUDE_MATRIX_TOOLS_H_

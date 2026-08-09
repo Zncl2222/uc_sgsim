@@ -13,11 +13,15 @@
 #ifndef UC_SGSIM_C_CORE_INCLUDE_RANDOM_TOOLS_H_
 #define UC_SGSIM_C_CORE_INCLUDE_RANDOM_TOOLS_H_
 
-# include "../c_array_tools/src/c_array.h"
+# include <stddef.h>
+# include <stdint.h>
+
+# define SGSIM_MT19937_STATE_SIZE 624
 
 /** RNG state with a cached Box-Muller pair for the native simulator. */
 typedef struct {
-    mt19937_state generator;
+    uint32_t generator_state[SGSIM_MT19937_STATE_SIZE];
+    size_t generator_index;
     int has_spare_normal;
     double spare_normal;
 } sgsim_rng_t;

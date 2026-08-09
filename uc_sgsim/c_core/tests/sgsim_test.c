@@ -3,9 +3,13 @@
 
 # include <stdio.h>
 # include <math.h>
+# include <stdint.h>
 # include "../include/cov_model.h"
 # include "../include/sgsim.h"
 # include "../include/kriging.h"
+# include "../include/matrix_tools.h"
+# include "../include/native_array.h"
+# include "../include/native_matrix.h"
 # include "../include/variogram.h"
 # include "utest.h"
 
@@ -215,8 +219,8 @@ UTEST(test, cholesky_solver_matches_two_neighbor_solution) {
     EXPECT_TRUE(sampling_state_init(&sampling, 5));
     EXPECT_TRUE(kriging_workspace_init(&workspace, 5, &model));
 
-    sampling.sampled[0] = 0;
-    sampling.sampled[1] = 4;
+    sampling.sampled.data[0] = 0;
+    sampling.sampled.data[1] = 4;
     sampling.currlen = 2;
     sampling.neighbor = 2;
     sampling_state_update(&sampling, 2);
@@ -236,8 +240,8 @@ UTEST(test, cholesky_solver_matches_two_neighbor_solution) {
     double expected_weight = target_covariance / (model.sill + sample_covariance);
     double expected_variance =
         model.sill - 2.0 * expected_weight * target_covariance;
-    EXPECT_NEAR(expected_weight, workspace.weights[0], 1e-12);
-    EXPECT_NEAR(expected_weight, workspace.weights[1], 1e-12);
+    EXPECT_NEAR(expected_weight, workspace.weights.data[0], 1e-12);
+    EXPECT_NEAR(expected_weight, workspace.weights.data[1], 1e-12);
     EXPECT_NEAR(sqrt(expected_variance), workspace.kriging_std, 1e-12);
     EXPECT_EQ(0.0, workspace.diagonal_jitter);
 
@@ -261,8 +265,8 @@ UTEST(test, cholesky_solver_regularizes_singular_covariance) {
     EXPECT_TRUE(sampling_state_init(&sampling, 3));
     EXPECT_TRUE(kriging_workspace_init(&workspace, 3, &model));
 
-    sampling.sampled[0] = 0;
-    sampling.sampled[1] = 1;
+    sampling.sampled.data[0] = 0;
+    sampling.sampled.data[1] = 1;
     sampling.currlen = 2;
     sampling.neighbor = 2;
     sampling_state_update(&sampling, 2);
@@ -282,11 +286,14 @@ UTEST(test, cholesky_solver_regularizes_singular_covariance) {
     double explained_variance = 0.0;
     double weighted_covariance = 0.0;
     for (int row = 0; row < 2; row++) {
-        explained_variance += workspace.weights[row] * workspace.covariance_vector[row];
+        explained_variance += workspace.weights.data[row]
+            * workspace.covariance_vector.data[row];
         for (int column = 0; column < 2; column++) {
-            weighted_covariance += workspace.weights[row]
-                * workspace.covariance_matrix[row * workspace.matrix_stride + column]
-                * workspace.weights[column];
+            weighted_covariance += workspace.weights.data[row]
+                * workspace.covariance_matrix.data[
+                    (size_t)row * workspace.covariance_matrix.stride
+                    + (size_t)column]
+                * workspace.weights.data[column];
         }
     }
     double expected_variance = model.sill
@@ -442,6 +449,9 @@ UTEST(test, unsupported_and_invalid_options_return_status) {
     simulation.array = output;
     model.k_range = NAN;
     EXPECT_EQ(SGSIM_STATUS_INVALID_ARGUMENT, sgsim_run_checked(&simulation, &model, 0));
+    model.k_range = 3.0;
+    simulation.randomseed = -1;
+    EXPECT_EQ(SGSIM_STATUS_INVALID_ARGUMENT, sgsim_run_checked(&simulation, &model, 0));
 }
 
 UTEST(test, variance) {
@@ -452,6 +462,158 @@ UTEST(test, variance) {
 
     double var = variance(arr, 20);
     EXPECT_NEAR(299.25, var, 1e-12);
+}
+
+UTEST(test, native_arrays_check_sizes_bounds_and_ownership) {
+    sgsim_int_array_t integers = {0};
+    sgsim_double_array_t doubles = {0};
+
+    EXPECT_EQ(SGSIM_NUMERIC_OK, sgsim_int_array_init(&integers, 4));
+    EXPECT_EQ(SGSIM_NUMERIC_OK, sgsim_int_array_iota(&integers));
+    int integer_value = -1;
+    EXPECT_EQ(SGSIM_NUMERIC_OK, sgsim_int_array_get(&integers, 3, &integer_value));
+    EXPECT_EQ(3, integer_value);
+    EXPECT_EQ(
+        SGSIM_NUMERIC_INVALID_ARGUMENT,
+        sgsim_int_array_get(&integers, 4, &integer_value));
+
+    EXPECT_EQ(SGSIM_NUMERIC_OK, sgsim_double_array_init(&doubles, 2));
+    EXPECT_EQ(SGSIM_NUMERIC_OK, sgsim_double_array_set(&doubles, 1, 2.5));
+    double double_value = 0.0;
+    EXPECT_EQ(
+        SGSIM_NUMERIC_OK,
+        sgsim_double_array_get(&doubles, 1, &double_value));
+    EXPECT_EQ(2.5, double_value);
+    EXPECT_EQ(
+        SGSIM_NUMERIC_INVALID_ARGUMENT,
+        sgsim_double_array_set(&doubles, 2, 1.0));
+
+    sgsim_int_array_free(&integers);
+    sgsim_int_array_free(&integers);
+    sgsim_double_array_free(&doubles);
+    sgsim_double_array_free(&doubles);
+    EXPECT_TRUE(integers.data == NULL);
+    EXPECT_EQ(0U, integers.length);
+
+    EXPECT_EQ(
+        SGSIM_NUMERIC_SIZE_OVERFLOW,
+        sgsim_double_array_init(&doubles, SIZE_MAX));
+    EXPECT_TRUE(doubles.data == NULL);
+}
+
+UTEST(test, native_matrix_cholesky_solves_spd_system) {
+    sgsim_double_matrix_t matrix = {0};
+    sgsim_double_matrix_t factor = {0};
+    EXPECT_EQ(SGSIM_NUMERIC_OK, sgsim_double_matrix_init(&matrix, 3, 3));
+    EXPECT_EQ(SGSIM_NUMERIC_OK, sgsim_double_matrix_init(&factor, 3, 3));
+
+    const double values[] = {
+        4.0, 1.0, 1.0,
+        1.0, 3.0, 0.0,
+        1.0, 0.0, 2.0,
+    };
+    for (size_t row = 0; row < 3; row++) {
+        for (size_t column = 0; column < 3; column++) {
+            EXPECT_EQ(
+                SGSIM_NUMERIC_OK,
+                sgsim_double_matrix_set(
+                    &matrix,
+                    row,
+                    column,
+                    values[row * 3 + column]));
+        }
+    }
+
+    double jitter = -1.0;
+    EXPECT_EQ(
+        SGSIM_NUMERIC_OK,
+        sgsim_cholesky_factorize_regularized(&matrix, &factor, 3, &jitter));
+    EXPECT_EQ(0.0, jitter);
+
+    double right_hand_side[] = {9.0, 7.0, 7.0};
+    double work[3];
+    double solution[3];
+    EXPECT_EQ(
+        SGSIM_NUMERIC_OK,
+        sgsim_cholesky_solve(
+            &factor,
+            right_hand_side,
+            work,
+            solution,
+            3));
+    EXPECT_NEAR(1.0, solution[0], 1e-12);
+    EXPECT_NEAR(2.0, solution[1], 1e-12);
+    EXPECT_NEAR(3.0, solution[2], 1e-12);
+
+    double quadratic_form = 0.0;
+    EXPECT_EQ(
+        SGSIM_NUMERIC_OK,
+        sgsim_symmetric_quadratic_form(
+            &matrix,
+            solution,
+            3,
+            &quadratic_form));
+    EXPECT_NEAR(44.0, quadratic_form, 1e-12);
+
+    double value = 0.0;
+    EXPECT_EQ(
+        SGSIM_NUMERIC_INVALID_ARGUMENT,
+        sgsim_double_matrix_get(&matrix, 3, 0, &value));
+    sgsim_double_matrix_free(&matrix);
+    sgsim_double_matrix_free(&factor);
+
+    EXPECT_EQ(
+        SGSIM_NUMERIC_SIZE_OVERFLOW,
+        sgsim_double_matrix_init(&matrix, SIZE_MAX, 2));
+    EXPECT_EQ(
+        SGSIM_NUMERIC_SIZE_OVERFLOW,
+        sgsim_double_matrix_init(
+            &matrix,
+            SIZE_MAX / sizeof(double) + 1U,
+            1));
+}
+
+UTEST(test, native_matrix_rejects_nonfinite_input) {
+    sgsim_double_matrix_t matrix = {0};
+    sgsim_double_matrix_t factor = {0};
+    EXPECT_EQ(SGSIM_NUMERIC_OK, sgsim_double_matrix_init(&matrix, 2, 2));
+    EXPECT_EQ(SGSIM_NUMERIC_OK, sgsim_double_matrix_init(&factor, 2, 2));
+    matrix.data[0] = 1.0;
+    matrix.data[1] = NAN;
+    matrix.data[2] = NAN;
+    matrix.data[3] = 1.0;
+    double jitter = 0.0;
+    EXPECT_EQ(
+        SGSIM_NUMERIC_NONFINITE_VALUE,
+        sgsim_cholesky_factorize_regularized(&matrix, &factor, 2, &jitter));
+    sgsim_double_matrix_free(&matrix);
+    sgsim_double_matrix_free(&factor);
+}
+
+UTEST(test, legacy_lu_wrapper_solves_without_writing_past_result) {
+    double row0[] = {4.0, 3.0};
+    double row1[] = {6.0, 3.0};
+    double* matrix[] = {row0, row1};
+    double right_hand_side[] = {10.0, 12.0};
+    double result[] = {0.0, 0.0, 1234.0};
+    lu_inverse_solver(matrix, right_hand_side, result, 2);
+    EXPECT_NEAR(1.0, result[0], 1e-12);
+    EXPECT_NEAR(2.0, result[1], 1e-12);
+    EXPECT_EQ(1234.0, result[2]);
+}
+
+UTEST(test, variogram_uses_lag_windows_without_quadratic_storage) {
+    double values[] = {0.0, 1.0, 2.0, 3.0};
+    double result[] = {-1.0, -1.0, -1.0, -1.0};
+    variogram(values, result, 4, 4, 1);
+    EXPECT_NEAR(0.5, result[0], 1e-12);
+    EXPECT_NEAR(11.0 / 10.0, result[1], 1e-12);
+    EXPECT_NEAR(5.0 / 3.0, result[2], 1e-12);
+    EXPECT_NEAR(17.0 / 6.0, result[3], 1e-12);
+
+    double shifted[] = {1e12 + 1.0, 1e12 + 2.0, 1e12 + 3.0};
+    EXPECT_NEAR(2.0 / 3.0, variance(shifted, 3), 1e-12);
+    EXPECT_TRUE(isnan(variance(NULL, 0)));
 }
 
 UTEST_MAIN();

@@ -10,67 +10,54 @@
  * License: MIT
  */
 
-# include <stdio.h>
 # include <math.h>
-# include <malloc.h>
+# include <stddef.h>
 
 # include "../include/variogram.h"
-# include "../include/matrix_tools.h"
-# include "../c_array_tools/src/c_array.h"
 
 void variogram(const double* array, double* v, int mlen, int bw, int bw_s) {
-    double z_temp;
-    double count;
-    c_array_double temp;
-    c_matrix_double pdist_temp;
-    c_matrix_init(&pdist_temp, mlen, mlen);
+    if (array == NULL || v == NULL || mlen <= 0 || bw <= 0 || bw_s <= 0) {
+        return;
+    }
+    size_t value_count = (size_t)mlen;
+    size_t lag_step = (size_t)bw_s;
+    for (size_t bin = 0; bin < (size_t)bw; bin += lag_step) {
+        size_t lower_lag = bin > lag_step ? bin - lag_step : 1U;
+        size_t upper_lag = bin + lag_step;
+        upper_lag = upper_lag >= value_count ? value_count - 1U : upper_lag;
 
-    temp.data = d_arange(mlen);
-
-    pdist(temp.data, pdist_temp.data, mlen);
-
-    for (int i = 0; i < bw; i += bw_s) {
-        z_temp = 0;
-        count = 0;
-        double bw_lower = i - bw_s;
-        double bw_upper = i + bw_s;
-
-        for (int j = 0; j < mlen; j++) {
-            double array_j = array[j];
-
-            for (int k = 0; k < j; k++) {
-                double pdist_jk = pdist_temp.data[j][k];
-
-                if (pdist_jk >= bw_lower && pdist_jk <= bw_upper) {
-                    double diff = array_j - array[k];
-                    z_temp += diff * diff;
-                    count += 1;
-                }
+        double squared_difference_sum = 0.0;
+        double compensation = 0.0;
+        size_t pair_count = 0;
+        for (size_t lag = lower_lag; lag <= upper_lag; lag++) {
+            for (size_t left = 0; left < value_count - lag; left++) {
+                double difference = array[left + lag] - array[left];
+                double term = difference * difference;
+                double corrected = term - compensation;
+                double updated = squared_difference_sum + corrected;
+                compensation = (updated - squared_difference_sum) - corrected;
+                squared_difference_sum = updated;
+                pair_count++;
             }
         }
 
-        if (z_temp >= 1e-6) {
-            v[i] = z_temp / (2 * count);
+        if (squared_difference_sum >= 1e-6 && pair_count != 0) {
+            v[bin] = squared_difference_sum / (2.0 * (double)pair_count);
         }
     }
-
-    c_array_free(&temp);
-    c_matrix_free(&pdist_temp);
 }
 
 double variance(const double* array, int mlen) {
+    if (array == NULL || mlen <= 0) {
+        return NAN;
+    }
     double mean = 0;
-    double var = 0;
+    double sum_of_squares = 0;
     for (int i = 0; i < mlen; i++) {
-        mean = mean + array[i];
+        double delta = array[i] - mean;
+        mean += delta / (double)(i + 1);
+        double updated_delta = array[i] - mean;
+        sum_of_squares += delta * updated_delta;
     }
-
-    mean = mean / mlen;
-
-    for (int i = 0; i < mlen; i++) {
-        var = var + (pow(array[i] - mean, 2));
-    }
-    var = var / mlen;
-
-    return var;
+    return sum_of_squares / (double)mlen;
 }

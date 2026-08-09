@@ -62,6 +62,8 @@ New Python integrations should prefer the result-oriented
 * Multi-core simulation using Python multiprocessing
 * A sanitizer-tested native C engine validated against the Python reference
   for the supported one-dimensional, zero-mean Simple Kriging profile
+* An owned, contiguous [native array and matrix core](docs/native-numerics.md)
+  with checked allocation and allocation-free Cholesky solves
 
 ## Examples
 ```py

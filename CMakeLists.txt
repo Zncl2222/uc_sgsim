@@ -56,7 +56,7 @@ endif()
 # unittest
 if(IS_EXECUTE)
     project(unittest)
-    include(Dart)
+    include(CTest)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fprofile-arcs -ftest-coverage")
     set(CTEST_COVERAGE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/coverage")
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/test)
@@ -64,9 +64,6 @@ if(IS_EXECUTE)
     set(CTEST_COVERAGE_EXCLUDE
         '/usr/include/*' # Exclude system headers
         '${CMAKE_CURRENT_SOURCE_DIR}/test/utest.h' # Exclude a specific file
-        '${CMAKE_CURRENT_SOURCE_DIR}/src/c_array.c'
-        '${CMAKE_CURRENT_SOURCE_DIR}/src/c_array_mt.c'
-        '${CMAKE_CURRENT_SOURCE_DIR}/include/c_array.h'
     )
     add_custom_target(
         coverage

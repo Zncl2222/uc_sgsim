@@ -23,8 +23,6 @@ jobs:
     runs-on: ${{ matrix.runs-on }}
     steps:
       - uses: actions/checkout@v4
-      - name: Pull Submodule
-        run: git submodule update --init --recursive
       - name: Build DLL & Set file name windows
         if: matrix.runs-on == 'windows-latest'
         shell: pwsh

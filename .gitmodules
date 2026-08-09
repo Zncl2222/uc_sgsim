@@ -1,4 +1,0 @@
-[submodule "uc_sgsim/c_core/c_array_tools"]
-	path = uc_sgsim/c_core/c_array_tools
-	url = https://github.com/Zncl2222/c_array_tools.git
-	branch = main

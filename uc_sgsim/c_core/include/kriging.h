@@ -13,6 +13,8 @@
 #define UC_SGSIM_C_CORE_INCLUDE_KRIGING_H_
 
 # include "../include/cov_model.h"
+# include "../include/native_array.h"
+# include "../include/native_matrix.h"
 # include "../include/random_tools.h"
 
 /**
@@ -26,7 +28,7 @@ typedef struct {
     int neighbor;           // Number of neighbors considered.
     int currlen;            // Current length of sampled points.
     int unsampled_point;    // Grid index currently being simulated.
-    int* sampled;           // Previously sampled grid indices.
+    sgsim_int_array_t sampled;  // Previously sampled grid indices.
 } sampling_state;
 
 /** One candidate conditioning point. */
@@ -39,13 +41,12 @@ typedef struct {
 /** Contiguous, per-simulation scratch buffers used by kriging. */
 typedef struct {
     const cov_model_t* model;
-    int matrix_stride;
     kriging_neighbor_t* candidates;
-    double* covariance_vector;
-    double* covariance_matrix;
-    double* factor_matrix;
-    double* weights;
-    double* solve_temp;
+    sgsim_double_array_t covariance_vector;
+    sgsim_double_matrix_t covariance_matrix;
+    sgsim_double_matrix_t factor_matrix;
+    sgsim_double_array_t weights;
+    sgsim_double_array_t solve_temp;
     double kriging_std;
     double diagonal_jitter;
 } kriging_workspace_t;

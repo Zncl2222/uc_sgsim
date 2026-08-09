@@ -10,62 +10,118 @@
  * License: MIT
  */
 
-# include <stdio.h>
+# include <errno.h>
 # include <math.h>
+# include <stdio.h>
 # include <stdlib.h>
 # include <string.h>
-# include <errno.h>
+
 # include "../include/matrix_tools.h"
-# include "../c_array_tools/src/c_array.h"
-# ifdef __WIN32__
+# include "../include/native_array.h"
+# include "../include/native_matrix.h"
+
+# ifdef _WIN32
 # include <direct.h>
-# include <io.h>
-# elif defined(__linux__) || defined(__unix__)
-# include <fcntl.h>
-# include <sys/io.h>
+# else
 # include <sys/stat.h>
-struct stat st = {0};
 # endif
 
+static void mark_solver_failure(double* result, int n) {
+    if (result == NULL || n <= 0) {
+        return;
+    }
+    for (int index = 0; index < n; index++) {
+        result[index] = NAN;
+    }
+}
 
 void lu_inverse_solver(double** mat, const double* array, double* result, int n) {
-    c_matrix_double lower;
-    c_matrix_double upper;
-    c_array_double y;
-
-    int buffer = n + 1;
-    c_matrix_init(&lower, buffer, buffer);
-    c_matrix_init(&upper, buffer, buffer);
-    c_array_init(&y, buffer);
-
-    lu_decomposition(mat, lower.data, upper.data, n);
-
-    // Solve L(Ux)=b, assume Ux=y
-    y.data[0] = array[0] / lower.data[0][0];  // NOSONAR
-
-    for (int i = 1; i < n; i++) {
-        y.data[i] = array[i];
-        for (int j = 0; j < i; j++) {
-            y.data[i] = y.data[i] - lower.data[i][j] * y.data[j];
-        }
-        y.data[i] = y.data[i] / lower.data[i][i];
+    if (mat == NULL || array == NULL || result == NULL || n <= 0) {
+        mark_solver_failure(result, n);
+        return;
     }
-
-    result[n] = y.data[n];
-
-    for (int i = n - 1; i >= 0; i--) {
-        result[i] = y.data[i];
-        for (int j = i + 1; j < n; j++) {
-            result[i] -= upper.data[i][j] * result[j];
+    for (int row = 0; row < n; row++) {
+        if (mat[row] == NULL) {
+            mark_solver_failure(result, n);
+            return;
         }
     }
 
-    c_matrix_free(&lower);
-    c_matrix_free(&upper);
-    c_array_free(&y);
+    sgsim_double_matrix_t lower = {0};
+    sgsim_double_matrix_t upper = {0};
+    sgsim_double_array_t temporary = {0};
+    size_t order = (size_t)n;
+    if (sgsim_double_matrix_init(&lower, order, order) != SGSIM_NUMERIC_OK
+        || sgsim_double_matrix_init(&upper, order, order) != SGSIM_NUMERIC_OK
+        || sgsim_double_array_init(&temporary, order) != SGSIM_NUMERIC_OK) {
+        mark_solver_failure(result, n);
+        goto cleanup;
+    }
+
+    for (int pivot = 0; pivot < n; pivot++) {
+        for (int row = pivot; row < n; row++) {
+            double value = mat[row][pivot];
+            for (int index = 0; index < pivot; index++) {
+                value -= lower.data[(size_t)row * lower.stride + (size_t)index]
+                    * upper.data[(size_t)index * upper.stride + (size_t)pivot];
+            }
+            lower.data[(size_t)row * lower.stride + (size_t)pivot] = value;
+        }
+        double diagonal = lower.data[(size_t)pivot * lower.stride + (size_t)pivot];
+        if (!isfinite(diagonal) || fabs(diagonal) <= 1e-15) {
+            mark_solver_failure(result, n);
+            goto cleanup;
+        }
+        upper.data[(size_t)pivot * upper.stride + (size_t)pivot] = 1.0;
+        for (int column = pivot + 1; column < n; column++) {
+            double value = mat[pivot][column];
+            for (int index = 0; index < pivot; index++) {
+                value -= lower.data[(size_t)pivot * lower.stride + (size_t)index]
+                    * upper.data[(size_t)index * upper.stride + (size_t)column];
+            }
+            upper.data[(size_t)pivot * upper.stride + (size_t)column] =
+                value / diagonal;
+        }
+    }
+
+    for (int row = 0; row < n; row++) {
+        double value = array[row];
+        for (int column = 0; column < row; column++) {
+            value -= lower.data[(size_t)row * lower.stride + (size_t)column]
+                * temporary.data[column];
+        }
+        value /= lower.data[(size_t)row * lower.stride + (size_t)row];
+        if (!isfinite(value)) {
+            mark_solver_failure(result, n);
+            goto cleanup;
+        }
+        temporary.data[row] = value;
+    }
+
+    for (int row = n; row-- > 0;) {
+        double value = temporary.data[row];
+        for (int column = row + 1; column < n; column++) {
+            value -= upper.data[(size_t)row * upper.stride + (size_t)column]
+                * result[column];
+        }
+        result[row] = value;
+    }
+
+cleanup:
+    sgsim_double_matrix_free(&lower);
+    sgsim_double_matrix_free(&upper);
+    sgsim_double_array_free(&temporary);
 }
 
 void lu_decomposition(double** mat, double** l, double** u, int n) {
+    if (mat == NULL || l == NULL || u == NULL || n <= 0) {
+        return;
+    }
+    for (int row = 0; row < n; row++) {
+        if (mat[row] == NULL || l[row] == NULL || u[row] == NULL) {
+            return;
+        }
+    }
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {
             if (j < i) {
@@ -83,6 +139,10 @@ void lu_decomposition(double** mat, double** l, double** u, int n) {
             } else if (j == i) {
                 u[i][j] = 1;
             } else {
+                if (fabs(l[i][i]) <= 1e-15) {
+                    u[i][j] = NAN;
+                    continue;
+                }
                 u[i][j] = mat[i][j] / l[i][i];
                 for (int k = 0; k < i; k++) {
                     u[i][j] = u[i][j] - ((l[i][k] * u[k][j]) / l[i][i]);
@@ -93,36 +153,58 @@ void lu_decomposition(double** mat, double** l, double** u, int n) {
 }
 
 int* arange(int x) {
-    int* res;
-    res = (int*)malloc(x*sizeof(int));
-
-    for (int i = 0; i < x; i++) {
-        res[i] = i;
+    if (x <= 0) {
+        return NULL;
     }
-    return res;
+    sgsim_int_array_t array = {0};
+    if (sgsim_int_array_init(&array, (size_t)x) != SGSIM_NUMERIC_OK
+        || sgsim_int_array_iota(&array) != SGSIM_NUMERIC_OK) {
+        sgsim_int_array_free(&array);
+        return NULL;
+    }
+    return array.data;
 }
 
 double* d_arange(int x) {
-    double* space;
-    space = (double*)malloc(x*sizeof(double));
-
-    for (int i = 0; i < x; i++) {
-        space[i] = i;
+    if (x <= 0) {
+        return NULL;
     }
-    return space;
+    sgsim_double_array_t array = {0};
+    if (sgsim_double_array_init(&array, (size_t)x) != SGSIM_NUMERIC_OK) {
+        return NULL;
+    }
+    for (int i = 0; i < x; i++) {
+        array.data[i] = (double)i;
+    }
+    return array.data;
 }
 
 void pdist(const double* x, double** c, int n_dim) {
+    if (x == NULL || c == NULL || n_dim <= 0) {
+        return;
+    }
     for (int i = 0; i < n_dim; i++) {
-        for (int j = 0; j < n_dim; j++) {
-            c[i][j] = fabs(x[j] - x[i]);
+        if (c[i] == NULL) {
+            return;
+        }
+        c[i][i] = 0.0;
+        for (int j = 0; j < i; j++) {
+            double distance = fabs(x[j] - x[i]);
+            c[i][j] = distance;
+            c[j][i] = distance;
         }
     }
 }
 
 void matrixform(const double* x, double** matrix, int n_dim) {
-    int index = 0;
+    if (x == NULL || matrix == NULL || n_dim <= 0) {
+        return;
+    }
+    size_t index = 0;
     for (int i = 0; i < n_dim; i++) {
+        if (matrix[i] == NULL) {
+            return;
+        }
         for (int j = 0; j < n_dim; j++) {
             matrix[i][j] = x[index];
             index++;
@@ -131,34 +213,42 @@ void matrixform(const double* x, double** matrix, int n_dim) {
 }
 
 void save_1darray(const double* array, int array_size,
-                char* fhead, char* path , int total_n, int curr_n) {
-    FILE *output;
-    int num_digits = (int)ceil(log10(total_n)) + 1;
-    char format[200];
-
-    snprintf(format, sizeof(format), "%s%s%%0%dd.txt", path, fhead, num_digits);
-
-    #ifdef __linux__
-    if (mkdir(path, 0770 | O_EXCL) == -1) {
-        if (errno != EEXIST) {
-            printf("Folder already exist!");
-        }
+                const char* fhead, const char* path, int total_n, int curr_n) {
+    if (array == NULL || array_size < 0 || fhead == NULL || path == NULL) {
+        return;
     }
-    #elif defined(__WIN32__)
+    int num_digits = total_n > 1 ? (int)floor(log10((double)total_n)) + 1 : 1;
+    #ifdef _WIN32
     if (_mkdir(path) == -1) {
         if (errno != EEXIST) {
-            printf("Folder already exist!");
+            perror("Failed to create output directory");
+            return;
         }
+    }
+    #else
+    if (mkdir(path, 0770) == -1 && errno != EEXIST) {
+        perror("Failed to create output directory");
+        return;
     }
     #endif
 
     char filename[200];
-    snprintf(filename, sizeof(filename), format, curr_n);
+    int filename_length = snprintf(
+        filename,
+        sizeof(filename),
+        "%s%s%0*d.txt",
+        path,
+        fhead,
+        num_digits,
+        curr_n);
+    if (filename_length < 0 || (size_t)filename_length >= sizeof(filename)) {
+        return;
+    }
 
-    output = fopen(filename, "w");
+    FILE* output = fopen(filename, "w");
     if (output == NULL) {
         perror("Failed to open the file");
-        exit(1);
+        return;
     }
 
     for (int i = 0; i < array_size; i++) {
