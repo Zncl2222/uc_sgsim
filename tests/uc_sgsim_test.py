@@ -260,6 +260,32 @@ class TestUCSgsim:
         with pytest.raises(ValueError, match="either 'python' or 'c'"):
             uc.UCSgsim(X, nR, gaussian, engine='invalid')
 
+    @pytest.mark.parametrize(
+        ('grid_size', 'mean', 'message'),
+        [
+            ([X, 2], 0.0, 'only 1D grids'),
+            (X, 2.5, 'only a zero mean'),
+        ],
+    )
+    def test_mutated_c_engine_revalidates_scientific_profile(
+        self,
+        grid_size,
+        mean,
+        message,
+    ):
+        sgsim = uc.UCSgsim(grid_size, nR, gaussian, engine='python', mean=mean)
+        sgsim.engine = 'c'
+
+        with pytest.raises(ValueError, match=message):
+            sgsim.run(n_processes=1, randomseed=454)
+
+    def test_mutated_c_engine_revalidates_native_variogram_profile(self):
+        sgsim = uc.UCSgsim([X, 2], nR, gaussian, engine='python')
+        sgsim.engine = 'c'
+
+        with pytest.raises(ValueError, match='only 1D grids'):
+            sgsim.get_variogram(n_processes=1)
+
     def test_uc_wrong_kriging_method(self):
         with pytest.raises(TypeError):
             uc.UCSgsim(  # noqa

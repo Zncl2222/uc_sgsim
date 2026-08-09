@@ -122,11 +122,16 @@ class UCSgsim(SgsimField):
             min_value=min_value,
             mean=mean,
         )
-        if engine == 'c' and not isinstance(grid_size, int):
-            raise ValueError('the c backend currently supports only 1D grids')
-        if engine == 'c' and self.mean != 0.0:
-            raise ValueError('the c backend currently supports only a zero mean')
         self.engine = engine
+        if self.engine == 'c':
+            self._validate_native_configuration()
+
+    def _validate_native_configuration(self) -> None:
+        """Reject public configurations the native engine cannot represent."""
+        if not isinstance(self.grid_size, int):
+            raise ValueError('the c backend currently supports only 1D grids')
+        if self.mean != 0.0:
+            raise ValueError('the c backend currently supports only a zero mean')
 
     def run(self, n_processes: int = 1, randomseed: Optional[int] = None):
         """
@@ -318,6 +323,7 @@ class UCSgsim(SgsimField):
         Returns:
             np.array: Array containing generated random field realizations.
         """
+        self._validate_native_configuration()
         self.n_process = n_process
         if n_process > 1:
             self.realization_number = self.realization_number * n_process
@@ -406,6 +412,7 @@ class UCSgsim(SgsimField):
         Args:
             n_process (int, optional): Number of parallel processes to use (default is 1).
         """
+        self._validate_native_configuration()
         # Create a pool of processes and prepare the necessary arguments.
         # Then, distribute realizations and arguments to each process.
         pool = Pool(processes=n_process)
