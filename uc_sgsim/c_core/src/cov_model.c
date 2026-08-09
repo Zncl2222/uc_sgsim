@@ -14,28 +14,42 @@
 # include "../include/cov_model.h"
 
 void set_cov_model_default(cov_model_t* cov_model) {
-    cov_model->max_neighbor = cov_model->max_neighbor == 0 ? 4 : cov_model->max_neighbor;
-    cov_model->sill = cov_model->sill == 0 ? 1 : cov_model->sill;
     cov_model->bw = cov_model->bw_l / cov_model->bw_s;
 }
 
-void cov_compute(const double* x, double* cov, int n_dim, const cov_model_t* cov_model) {
+double cov_model_at_lag(double lag, const cov_model_t* cov_model) {
+    if (lag == 0.0) {
+        return cov_model->sill;
+    }
+
     double partial_sill = cov_model->sill - cov_model->nugget;
+    double scaled_lag = lag / cov_model->k_range;
+
+    switch (cov_model->kind) {
+        case COV_MODEL_EXPONENTIAL:
+            return partial_sill * exp(-3.0 * scaled_lag);
+        case COV_MODEL_SPHERICAL:
+            if (scaled_lag >= 1.0) {
+                return 0.0;
+            }
+            return partial_sill * (1.0 - 1.5 * scaled_lag + 0.5 * pow(scaled_lag, 3.0));
+        case COV_MODEL_GAUSSIAN:
+        default:
+            return partial_sill * exp(-3.0 * scaled_lag * scaled_lag);
+    }
+}
+
+void cov_compute(const double* x, double* cov, int n_dim, const cov_model_t* cov_model) {
     for (int i = 0; i < n_dim; i++) {
-        double factor =
-            (1 - exp(-3 * (x[i] * x[i]) / (cov_model->k_range * cov_model->k_range)));
-        cov[i] = cov_model->sill - (partial_sill * factor) + cov_model->nugget;
+        cov[i] = cov_model_at_lag(x[i], cov_model);
     }
 }
 
 void cov_compute2d(double* const* x, double* cov, int n_dim, const cov_model_t* cov_model) {
-    double partial_sill = cov_model->sill - cov_model->nugget;
     int index = 0;
     for (int i = 0; i < n_dim; i++) {
         for (int j = 0; j < n_dim; j++) {
-            double factor =
-                (1 - exp(-3 * (x[i][j] * x[i][j]) / (cov_model->k_range * cov_model->k_range)));
-            cov[index] = cov_model->sill - (partial_sill * factor) + cov_model->nugget;
+            cov[index] = cov_model_at_lag(x[i][j], cov_model);
             index++;
         }
     }

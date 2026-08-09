@@ -77,14 +77,25 @@ def test_worker_count_is_capped_to_useful_processes(covariance):
     [
         ('simple', 'SimpleKriging'),
         ('SimpleKriging', 'SimpleKriging'),
-        ('ordinary', 'OrdinaryKriging'),
-        ('ordinary_kriging', 'OrdinaryKriging'),
     ],
 )
 def test_kriging_names_are_normalized(covariance, name, expected):
     simulator = uc.SequentialGaussianSimulator(4, covariance, kriging=name)
 
     assert simulator.kriging == expected
+
+
+@pytest.mark.parametrize('kriging', ['ordinary', 'ordinary_kriging'])
+def test_unconditional_api_rejects_ordinary_kriging_names(covariance, kriging):
+    with pytest.raises(ValueError, match='unconditional stationary SGS'):
+        uc.SequentialGaussianSimulator(4, covariance, kriging=kriging)
+
+
+def test_unconditional_api_rejects_configured_ordinary_kriging(covariance):
+    kriging = uc.OrdinaryKriging(covariance, 4)
+
+    with pytest.raises(ValueError, match='unconditional stationary SGS'):
+        uc.SequentialGaussianSimulator(4, covariance, kriging=kriging)
 
 
 def test_configured_kriging_object_is_supported(covariance):
@@ -179,14 +190,22 @@ def test_c_backend_rejects_unsupported_configuration(covariance):
     with pytest.raises(ValueError, match='1D'):
         uc.SequentialGaussianSimulator((3, 2), covariance, backend='c')
 
-    with pytest.raises(ValueError, match='simple kriging'):
-        uc.SequentialGaussianSimulator(3, covariance, backend='c', kriging='ordinary')
-
-    with pytest.raises(ValueError, match='Gaussian covariance'):
-        uc.SequentialGaussianSimulator(3, uc.Spherical(4, 1, 3), backend='c')
-
     with pytest.raises(ValueError, match='zero mean'):
         uc.SequentialGaussianSimulator(3, covariance, backend='c', mean=1)
+
+
+@pytest.mark.parametrize('model_class', [uc.Gaussian, uc.Exponential, uc.Spherical])
+def test_c_backend_supports_public_1d_models(model_class):
+    simulator = uc.SequentialGaussianSimulator(
+        8,
+        model_class(8, 1, 4, sill=1.7, nugget=0.2),
+        backend='c',
+    )
+
+    result = simulator.simulate(2, seed=17)
+
+    assert result.shape == (2, 8, 1)
+    assert np.isfinite(result.values).all()
 
 
 def test_c_backend_result_has_the_same_shape_contract(covariance):

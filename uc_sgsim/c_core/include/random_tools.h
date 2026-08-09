@@ -15,6 +15,19 @@
 
 # include "../c_array_tools/src/c_array.h"
 
+/** RNG state with a cached Box-Muller pair for the native simulator. */
+typedef struct {
+    mt19937_state generator;
+    int has_spare_normal;
+    double spare_normal;
+} sgsim_rng_t;
+
+/** Initialize all native random streams from one deterministic seed. */
+void sgsim_rng_init(sgsim_rng_t* state, unsigned int seed);
+
+/** Draw a finite standard normal value, retaining the paired Box-Muller draw. */
+double sgsim_random_normal(sgsim_rng_t* state);
+
 /**
  * @brief Generate a random path of integers.
  *
@@ -27,6 +40,6 @@
  *
  * @return A pointer to the generated random path (same as `rpath`).
  */
-int* randompath(int* rpath, int length, mt19937_state* rng_state);
+int* randompath(int* rpath, int length, sgsim_rng_t* rng_state);
 
 #endif  // UC_SGSIM_C_CORE_INCLUDE_RANDOM_TOOLS_H_

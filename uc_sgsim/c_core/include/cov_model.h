@@ -13,6 +13,12 @@
 #ifndef UC_SGSIM_C_CORE_INCLUDE_COV_MODEL_H_
 #define UC_SGSIM_C_CORE_INCLUDE_COV_MODEL_H_
 
+typedef enum {
+    COV_MODEL_GAUSSIAN = 0,
+    COV_MODEL_EXPONENTIAL = 1,
+    COV_MODEL_SPHERICAL = 2
+} cov_model_kind_t;
+
 /**
  * @struct cov_model_t
  * @brief Structure to hold covariance model parameters.
@@ -28,16 +34,22 @@ typedef struct {
     double k_range;        // kriging range
     double sill;           // sill value
     double nugget;         // nugget value
+    int kind;              // covariance model kind (cov_model_kind_t)
 } cov_model_t;
 
 /**
- * @brief Set default values for a covariance model.
+ * @brief Resolve derived covariance-model values.
  *
- * This function sets default values for a covariance model if they are not already specified.
+ * This function computes ``bw`` from ``bw_l`` and ``bw_s``. It does not use
+ * zero-valued scientific parameters as implicit defaults: in particular,
+ * ``max_neighbor == 0`` explicitly disables neighborhood conditioning.
  *
  * @param cov_model A pointer to a cov_model_t structure to be initialized.
  */
 void set_cov_model_default(cov_model_t* cov_model);
+
+/** Calculate one covariance value at a non-negative lag distance. */
+double cov_model_at_lag(double lag, const cov_model_t* cov_model);
 
 /**
  * @brief Calculate covariance for a one-dimensional dataset.

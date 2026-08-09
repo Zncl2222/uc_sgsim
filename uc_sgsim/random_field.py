@@ -286,16 +286,17 @@ class SgsimField(RandomField, SgsimPlot):
                 self._use_cov_cache,
                 mean=self._mean,
             )
-        elif self._kriging == 'OrdinaryKriging':
-            self._kriging = OrdinaryKriging(
-                self.model,
-                self.grid_size,
-                self._use_cov_cache,
-                mean=self._mean,
+        elif self._kriging == 'OrdinaryKriging' or isinstance(
+            self._kriging,
+            OrdinaryKriging,
+        ):
+            raise ValueError(
+                'Ordinary Kriging is not supported for unconditional stationary SGS; '
+                'use Simple Kriging',
             )
         else:
-            if not isinstance(self._kriging, (SimpleKriging, OrdinaryKriging)):
-                raise TypeError('Kriging should be class SimpleKriging or OrdinaryKriging')
+            if not isinstance(self._kriging, SimpleKriging):
+                raise TypeError('Kriging should be class SimpleKriging')
             if not np.isclose(self._kriging.mean, self._mean):
                 raise ValueError('mean must match the mean configured on the Kriging object')
 

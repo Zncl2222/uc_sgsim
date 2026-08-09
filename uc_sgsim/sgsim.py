@@ -3,19 +3,28 @@ from __future__ import annotations
 import copy
 import time
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from ctypes import CDLL, POINTER, c_double, c_int
+from ctypes import CDLL, POINTER, c_char_p, c_double, c_int
 from typing import Literal, Optional
 from multiprocessing import Pool
 
 import numpy as np
 from uc_sgsim.random_field import SgsimField
+from uc_sgsim.cov_model import Exponential, Gaussian, Spherical
 from uc_sgsim.cov_model.base import CovModel
 from uc_sgsim.kriging import Kriging
 from uc_sgsim.utils import CovModelStructure, SgsimStructure
-from .exception import IterationError
+from .exception import IterationError, NativeEngineError
 
 BASE_DIR = Path(__file__).resolve().parent
+
+_COVARIANCE_MODEL_KIND = {
+    Gaussian: 0,
+    Exponential: 1,
+    Spherical: 2,
+}
+_NATIVE_ITERATION_LIMIT = 3
 
 
 class UCSgsim(SgsimField):
@@ -33,10 +42,9 @@ class UCSgsim(SgsimField):
             of two integers for a 2D grid.
         realization_number (int): The number of realizations to generate.
         model (CovModel): The covariance model used for the simulation.
-        kriging (str | Kriging, optional): The kriging method used for
-            interpolation, either a string specifying the method
-            ('SimpleKriging' or 'OrdinaryKriging') or a custom Kriging
-            object. Defaults to 'SimpleKriging'.
+        kriging (str | Kriging, optional): Simple Kriging configuration.
+            Ordinary Kriging is available for standalone interpolation but is
+            rejected by this unconditional stationary simulator.
         engine (Literal['python', 'c'], optional): The engine to run
             the simulation ('python' or 'c'). Defaults to 'python'.
         mean (float, optional): Known global mean for Simple Kriging.
@@ -99,6 +107,8 @@ class UCSgsim(SgsimField):
         min_value: Optional[float] = None,
         mean: float = 0.0,
     ):
+        if engine not in ('python', 'c'):
+            raise ValueError("engine must be either 'python' or 'c'")
         super().__init__(
             grid_size=grid_size,
             n_realizations=realization_number,
@@ -113,6 +123,15 @@ class UCSgsim(SgsimField):
             mean=mean,
         )
         self.engine = engine
+        if self.engine == 'c':
+            self._validate_native_configuration()
+
+    def _validate_native_configuration(self) -> None:
+        """Reject public configurations the native engine cannot represent."""
+        if not isinstance(self.grid_size, int):
+            raise ValueError('the c backend currently supports only 1D grids')
+        if self.mean != 0.0:
+            raise ValueError('the c backend currently supports only a zero mean')
 
     def run(self, n_processes: int = 1, randomseed: Optional[int] = None):
         """
@@ -289,6 +308,8 @@ class UCSgsim(SgsimField):
             lib = CDLL(str(BASE_DIR) + r'/c_core/uc_sgsim.so')
         elif sys.platform.startswith('win32'):
             lib = CDLL(str(BASE_DIR) + r'/c_core/uc_sgsim.dll', winmode=0)
+        else:
+            raise OSError(f'the native engine does not support platform {sys.platform!r}')
         return lib
 
     def _run_c(self, n_process: int, randomseed: int) -> np.array:
@@ -302,23 +323,22 @@ class UCSgsim(SgsimField):
         Returns:
             np.array: Array containing generated random field realizations.
         """
-        # Create a pool of processes and prepare the necessary arguments.
-        # Then, distribute realizations and arguments to each process.
-        pool = Pool(processes=n_process)
+        self._validate_native_configuration()
         self.n_process = n_process
         if n_process > 1:
             self.realization_number = self.realization_number * n_process
         self.random_fields = np.empty([self.realization_number, self.x_size])
+        if randomseed is None:
+            randomseed = int(np.random.randint(0, 2**31 - 1))
         rand_list = [randomseed + i for i in range(n_process)]
 
-        # Run parallel computing with dynamic link lib
-        _simulation = pool.starmap(self._simulation_c, zip(rand_list))
-        pool.close()
-        # Use pool.join() to measure the coverage of sub process
-        pool.join()
+        if n_process == 1:
+            simulation = [self._simulation_c(rand_list[0])]
+        else:
+            with ThreadPoolExecutor(max_workers=n_process) as executor:
+                simulation = list(executor.map(self._simulation_c, rand_list))
 
-        # Collect results into a Python-List (random_field)
-        self._reshape_simulaiton(_simulation, n_process)
+        self._reshape_simulaiton(simulation, n_process)
 
         return self.random_fields
 
@@ -336,40 +356,53 @@ class UCSgsim(SgsimField):
         lib = self._read_shared_lib()
         mlen = int(self.x_size)
         realization_number = int(self.realization_number // self.n_process)
-        random_field = np.empty([realization_number, self.x_size])
-        kriging = 1 if self.kriging == 'OrdinaryKriging' else 0
+        random_field = np.empty([realization_number, self.x_size], dtype=np.float64)
+        kriging = 0
+        try:
+            covariance_kind = _COVARIANCE_MODEL_KIND[type(self.model)]
+        except KeyError as error:
+            raise NativeEngineError(
+                f'unsupported native covariance model: {type(self.model).__name__}',
+            ) from error
 
         # Create sgsim and cov structure for dynamic link lib input
         sgsim_s = SgsimStructure(
             x_len=mlen,
             realization_numbers=realization_number,
             randomseed=randomseed,
-            kirging_method=kriging,
+            kriging_method=kriging,
             if_alloc_memory=0,
-            max_iteration=self.iteration_limit,
-            array=(c_double * (mlen * realization_number))(),
+            iteration_limit=self.iteration_limit,
+            array=random_field.ctypes.data_as(POINTER(c_double)),
             z_min=self._min_value,
             z_max=self._max_value,
+            constant_path=int(self.constant_path),
         )
         cov_s = CovModelStructure(
             bw_l=self.model.bandwidth_len,
             bw_s=self.model.bandwidth_step,
             bw=self.model.bandwidth_len // self.model.bandwidth_step,
             max_neighbor=self.max_neighbor,
-            use_cov_cache=0 if self.constant_path is False else 1,
+            use_cov_cache=int(self.cov_cache),
             range=self.model.k_range,
             sill=self.model.sill,
             nugget=self.model.nugget,
+            kind=covariance_kind,
         )
 
-        # Run simulation with dynamic link lib
-        sgsim = lib.sgsim_run
-        sgsim.argtypes = (POINTER(SgsimStructure), POINTER(CovModelStructure), c_int)
-        sgsim(sgsim_s, cov_s, 0)
+        simulate = lib.sgsim_run_checked
+        simulate.argtypes = (POINTER(SgsimStructure), POINTER(CovModelStructure), c_int)
+        simulate.restype = c_int
+        status = simulate(sgsim_s, cov_s, 0)
+        if status != 0:
+            status_message = lib.sgsim_status_message
+            status_message.argtypes = (c_int,)
+            status_message.restype = c_char_p
+            message = status_message(status).decode('utf-8')
+            if status == _NATIVE_ITERATION_LIMIT:
+                raise IterationError(message)
+            raise NativeEngineError(message)
 
-        # Collect results into a Python-List (random_field)
-        for i in range(realization_number):
-            random_field[i, :] = sgsim_s.array[i * mlen : (i + 1) * mlen]
         return random_field
 
     def _get_variogram_c(self, n_process: int = 1) -> np.array:
@@ -379,6 +412,7 @@ class UCSgsim(SgsimField):
         Args:
             n_process (int, optional): Number of parallel processes to use (default is 1).
         """
+        self._validate_native_configuration()
         # Create a pool of processes and prepare the necessary arguments.
         # Then, distribute realizations and arguments to each process.
         pool = Pool(processes=n_process)
