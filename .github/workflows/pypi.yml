@@ -1,11 +1,5 @@
-# This workflow will upload a Python Package using Twine when a release is created
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python#publishing-to-package-registries
-
-# This workflow uses actions that are not certified by GitHub.
-# They are provided by a third-party and are governed by
-# separate terms of service, privacy policy, and support
-# documentation.
-
+# Build wheels (one per platform; the native engine is loaded with ctypes, so
+# the wheels are independent of the Python version) and an sdist, then publish.
 name: Upload Python Package
 
 on:
@@ -14,54 +8,59 @@ on:
       - '*'
   release:
     types: [published]
+  workflow_dispatch:
 
 jobs:
-  build_shared_library:
+  build_wheels:
+    name: wheel (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        runs-on: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.runs-on }}
+        os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
-      - name: Build DLL & Set file name windows
-        if: matrix.runs-on == 'windows-latest'
-        shell: pwsh
-        run: |
-          .\cmake_build.bat -s
-          echo "filename=uc_sgsim.dll" >> $env:GITHUB_ENV
-      - name: Build Shared Library & Set file name ubuntu
-        if: matrix.runs-on == 'ubuntu-latest'
-        run: |
-          sh ./cmake_build.sh -s
-          echo "filename=uc_sgsim.so" >> "$GITHUB_ENV"
+      - uses: pypa/cibuildwheel@v2.21.3
+        env:
+          CIBW_BUILD: cp311-*
+          CIBW_ARCHS_LINUX: x86_64
+          CIBW_ARCHS_WINDOWS: AMD64
+          CIBW_ARCHS_MACOS: arm64
+          CIBW_TEST_REQUIRES: pytest pytest-xdist
+          CIBW_TEST_SOURCES: tests pytest.ini
+          CIBW_TEST_COMMAND: pytest -q -n auto
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.runs-on }}-shared-library
-          path: ./uc_sgsim/c_core/${{ env.filename }}
+          name: wheel-${{ matrix.os }}
+          path: ./wheelhouse/*.whl
+          if-no-files-found: error
 
-  test-release:
+  build_sdist:
     runs-on: ubuntu-latest
-    needs: [build_shared_library]
-    if: startsWith(github.ref, 'refs/tags/') && github.event_name != 'release'
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install build
-      - name: Download All Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          merge-multiple: true
       - run: |
-          mv ./uc_sgsim.dll ./uc_sgsim/c_core
-          mv ./uc_sgsim.so  ./uc_sgsim/c_core
-      - name: Build package
-        run: python -m build
+          python -m pip install --upgrade pip build
+          python -m build --sdist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: ./dist/*.tar.gz
+          if-no-files-found: error
+
+  test-release:
+    runs-on: ubuntu-latest
+    needs: [build_wheels, build_sdist]
+    if: startsWith(github.ref, 'refs/tags/') && github.event_name != 'release'
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
       - name: Publish distribution to Test PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
@@ -70,27 +69,13 @@ jobs:
 
   release-job:
     runs-on: ubuntu-latest
-    needs: [build_shared_library]
+    needs: [build_wheels, build_sdist]
     if: github.event_name == 'release' && github.event.action == 'published'
     steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/download-artifact@v4
         with:
-          python-version: '3.x'
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install build
-      - name: Download All Artifacts
-        uses: actions/download-artifact@v4
-        with:
+          path: dist
           merge-multiple: true
-      - run: |
-          mv ./uc_sgsim.dll ./uc_sgsim/c_core
-          mv ./uc_sgsim.so  ./uc_sgsim/c_core
-      - name: Build package
-        run: python -m build
       - name: Publish distribution to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
