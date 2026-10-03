@@ -1,6 +1,9 @@
 /**
  * @file native_matrix.c
  * @brief Checked contiguous matrices and Cholesky algorithms.
+ *
+ * Copyright (c) 2026 Zncl2222
+ * License: MIT
  */
 
 #include <float.h>

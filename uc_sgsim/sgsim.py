@@ -308,6 +308,8 @@ class UCSgsim(SgsimField):
             lib = CDLL(str(BASE_DIR) + r'/c_core/uc_sgsim.so')
         elif sys.platform.startswith('win32'):
             lib = CDLL(str(BASE_DIR) + r'/c_core/uc_sgsim.dll', winmode=0)
+        elif sys.platform == 'darwin':
+            lib = CDLL(str(BASE_DIR) + r'/c_core/uc_sgsim.dylib')
         else:
             raise OSError(f'the native engine does not support platform {sys.platform!r}')
         return lib

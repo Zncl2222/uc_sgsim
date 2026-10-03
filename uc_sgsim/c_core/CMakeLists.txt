@@ -1,7 +1,11 @@
 cmake_minimum_required(VERSION 3.15)
 
 project(c_core)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/uc_sgsim/c_core/")
+# Wheel builds (scikit-build-core) install into the build tree instead of
+# writing the library back into the source checkout.
+if(NOT SKBUILD)
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/uc_sgsim/c_core/")
+endif()
 
 # set the library type to share or static
 if(NOT DEFINED IS_EXECUTE OR NOT IS_EXECUTE)
@@ -73,6 +77,15 @@ endif()
 
 # compile and install the shared library
 if(NOT DEFINED IS_EXECUTE OR NOT IS_EXECUTE)
-    install(TARGETS uc_sgsim DESTINATION "${CMAKE_SOURCE_DIR}/uc_sgsim/c_core/")
+    if(SKBUILD)
+        # Relative to the wheel root; the DLL is a RUNTIME artifact on Windows.
+        install(
+            TARGETS uc_sgsim
+            LIBRARY DESTINATION uc_sgsim/c_core
+            RUNTIME DESTINATION uc_sgsim/c_core
+        )
+    else()
+        install(TARGETS uc_sgsim DESTINATION "${CMAKE_SOURCE_DIR}/uc_sgsim/c_core/")
+    endif()
     set_target_properties(uc_sgsim PROPERTIES PREFIX "")
 endif()

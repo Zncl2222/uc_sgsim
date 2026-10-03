@@ -56,6 +56,18 @@ New Python integrations should prefer the result-oriented
 [`SequentialGaussianSimulator` API](docs/python-api-v2.md). The existing
 `UCSgsim` API remains available for incremental migration.
 
+### Building from source
+The native engine is built with [scikit-build-core](https://scikit-build-core.readthedocs.io/)
+and CMake (>= 3.15) plus a C11 compiler:
+
+```bash
+pip install .          # build and install, including the native engine
+python -m build        # sdist and wheel in dist/
+```
+
+Wheels are published for Linux, Windows and macOS. For development builds that
+write the shared library next to the sources, use `make shared`.
+
 ## Features
 * One-dimensional unconditional random-field generation using SGS
 * A mathematically validated Python Simple Kriging reference implementation

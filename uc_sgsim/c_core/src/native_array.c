@@ -1,6 +1,9 @@
 /**
  * @file native_array.c
  * @brief Checked fixed-size allocation used by the native numerical core.
+ *
+ * Copyright (c) 2026 Zncl2222
+ * License: MIT
  */
 
 #include <limits.h>
