@@ -6,6 +6,9 @@
  * simulation workspaces know their final size up front, so fixed allocation
  * keeps ownership explicit, prevents pointer invalidation, and avoids hidden
  * allocations in hot loops.
+ *
+ * Copyright (c) 2026 Zncl2222
+ * License: MIT
  */
 
 #ifndef UC_SGSIM_C_CORE_INCLUDE_NATIVE_ARRAY_H_

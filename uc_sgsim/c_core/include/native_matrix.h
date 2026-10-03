@@ -1,6 +1,9 @@
 /**
  * @file native_matrix.h
  * @brief Contiguous row-major matrices and stable SPD solvers.
+ *
+ * Copyright (c) 2026 Zncl2222
+ * License: MIT
  */
 
 #ifndef UC_SGSIM_C_CORE_INCLUDE_NATIVE_MATRIX_H_
@@ -8,7 +11,7 @@
 
 #include <stddef.h>
 
-#include "native_array.h"
+#include "../include/native_array.h"
 
 typedef struct {
     double* data;

@@ -190,3 +190,30 @@ def test_native_simulation_has_no_hidden_file_output(tmp_path, monkeypatch):
     simulator.simulate(2, seed=7)
 
     assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    ('platform', 'library_name'),
+    [
+        ('linux', 'uc_sgsim.so'),
+        ('win32', 'uc_sgsim.dll'),
+        ('darwin', 'uc_sgsim.dylib'),
+    ],
+)
+def test_shared_library_name_follows_platform(monkeypatch, platform, library_name):
+    loaded = []
+    monkeypatch.setattr('uc_sgsim.sgsim.CDLL', lambda path, **kwargs: loaded.append(path))
+    monkeypatch.setattr('uc_sgsim.sgsim.sys.platform', platform)
+    simulation = uc.UCSgsim(5, 1, uc.Gaussian(10, 1, 6, sill=1.0))
+
+    simulation._read_shared_lib()
+
+    assert loaded[0].replace('\\', '/').endswith(f'/c_core/{library_name}')
+
+
+def test_shared_library_rejects_unsupported_platform(monkeypatch):
+    monkeypatch.setattr('uc_sgsim.sgsim.sys.platform', 'freebsd14')
+    simulation = uc.UCSgsim(5, 1, uc.Gaussian(10, 1, 6, sill=1.0))
+
+    with pytest.raises(OSError, match='does not support platform'):
+        simulation._read_shared_lib()
